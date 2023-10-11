@@ -81,7 +81,7 @@ class SquadClient(discord.Client):
         for validUser in await getSteamIDsForWhitelist():
             whitelistStr += f'Admin={validUser[0]}:WhitelistBot // {validUser[1]}\n'
         
-        with open(cfg['patreon_outputFile'], "w") as f:
+        with open(cfg['multiwl_outputFile'], "w") as f:
             f.write(whitelistStr)
 
     async def updateClanWhitelists(self):
@@ -646,7 +646,7 @@ cfg['featureEnable_PatreonAutoAudit']=os.getenv('featureEnable_PatreonAutoAudit'
 cfg['paypal_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('paypal_outputFile', 'paypalWLs.cfg'))
 cfg['monthlyWhitelists_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('monthlyWhitelists_outputFile', 'monthlyWLs.cfg'))
 cfg['squadGroups_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('squadGroups_outputFile', 'squadadmins.cfg'))
-cfg['patreon_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('patreon_outputFile', 'patreonWLs.cfg'))
+cfg['multiwl_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('multiwl_outputFile', 'multiWLs.cfg'))
 
 cfg['clanMoniker']=os.getenv('clanMoniker', 'Clan')
 cfg['pathToClanWhitelist']=os.getenv('pathToClanWhitelist', 'clanWLs.cfg')

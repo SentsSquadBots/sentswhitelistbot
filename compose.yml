@@ -1,4 +1,4 @@
-env_file: .env
+env_file: bot.env
 
 services:
   whitelistfs:
