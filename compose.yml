@@ -10,7 +10,7 @@ services:
     volumes:
       - ${host_cfg_folder}:/usr/share/nginx/html:ro
   whitelistbot:
-    image: whitelistbot
+    image: ghcr.io/sentssquadbots/sentswhitelistbot:latest
     container_name: whitelistbot
     restart: always   
     volumes:
