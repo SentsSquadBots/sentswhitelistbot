@@ -59,6 +59,13 @@ Follow the steps above inside of WSL.
 
 If you want to run the bot without Docker, you will need to install Python and all the packages from `requirements.txt` yourself, plus you will need to serve the cfg files as well.
 
+## Limit Command Usage
+The bot has multiple /slashcommands. The public members of your server should not have access to these commands. **You must ensure the bot's commands are only accessible to your admins**
+
+Go into your server's settings -> Integrations -> find the bot, and disable @everyone from using the commands
+
+![Disable Command Access](https://i.imgur.com/ZoNavuU.png)
+
 ## Adding the CFG's to Squad's RemoteAdminListHosts.cfg
 The bot generates .cfg files and places them into the folder as defined in the `host_cfg_folder` env variable. (Default is a folder named `cfgs` in the same folder as the `compose.yml`)
 
