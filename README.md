@@ -2,7 +2,7 @@
 A Discord bot with various features for managing both Squad whitelists and generic Squad permissions (such as `canseeadminchat` and `cameraman`)
 
 ## Features Overview
-The bot is split up into 3 areas;
+The bot is split up into 4 areas;
 1. Role-Based Multi-Whitelist Management
    - Allows you to give certain Discord roles a set amount of whitelists. Discord members with that role will be allowed to self-manage the SteamIDs on their whitelist up to the set limit.
    - Example: Configure bot to give the @Whitelist5 (5) whitelists. Each Discord member with this role can choose up to (5) steamIDs to put on their personal whitelist.
