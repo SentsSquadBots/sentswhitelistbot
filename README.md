@@ -7,10 +7,12 @@ The bot is split up into 4 areas;
    - Allows you to give certain Discord roles a set amount of whitelists. Discord members with that role will be allowed to self-manage the SteamIDs on their whitelist up to the set limit.
    - Example: Configure bot to give the @Whitelist5 (5) whitelists. Each Discord member with this role can choose up to (5) steamIDs to put on their personal whitelist.
    - You can easily integrate this into Patreon subscriptions by configuring Patreon to assign a special role to different tiers of subscribers, and configure the bot to give those same Discord roles a set amount of whitelists. This will fully automate whitelist subscriptions.
+![multiwl](https://github.com/SentsSquadBots/sentswhitelistbot/assets/121533452/df23382b-2574-4ee3-a73f-a4508036c720)
 2. Squad Group Permissions Management
    - Allows you to link Discord roles to a group of in-game permissions
    - Example: Configure bot to link the @Admin Discord role to the permission string `'reserve,balance,chat,canseeadminchat,teamchange,forceteamchange,cameraman'`. Any Discord member with the @Admin role will receive the configured in-game permissions.
    - Any Discord member who needs to receive permissions **needs** to use the /admin_link command and provide their SteamID. 
+![squadgroups](https://github.com/SentsSquadBots/sentswhitelistbot/assets/121533452/77649fea-232c-4d74-960a-b4ca47f9ef0d)
 3. PayPal Payment Whitelist Integration
    - Requires a production PayPal ClientID and Secret [from here](https://developer.paypal.com/dashboard/applications/production). The Application Name is up to you.
    - Allows Discord members to make PayPal payments to buy a **single** whitelist slot in bulk.
@@ -18,6 +20,7 @@ The bot is split up into 4 areas;
 4. Clan Whitelist Management
    - Allows anyone with the same clan role to edit the SteamIDs on the clan's whitelist.
    - Number of whitelists can be configured on a per-clan basis.
+![Discord_2023-10-12_07-47-36](https://github.com/SentsSquadBots/sentswhitelistbot/assets/121533452/02dfc29f-11aa-4e73-9351-39262c0bab65)
 
 ## Running The Bot
 This bot was designed to run using [Docker](https://www.docker.com/). A Docker image is automatically built and is available from this repo (`ghcr.io/sentssquadbots/sentswhitelistbot:latest`). The only prerequisite to run this bot is to install Docker first. 
@@ -109,7 +112,12 @@ You need to change the following:
 - `featureEnable_SquadGroups= "false"`
   - set to `"true"` to use this feature.
 
-All remaining configuration is done with /slashcommands from within Discord. See the `/groups` set of commands from the bot.
+All remaining configuration is done with /slashcommands from within Discord. See the `/groups` set of commands from the bot. An example for setting up an Admin group:
+- `/groups create_group name:Admin`
+- `/groups link_role_to_group group:Admin role:@Admin`
+- `/groups edit_group_permissions groupname:Admin`
+  - Paste in `reserve,balance,chat,canseeadminchat,teamchange,forceteamchange,cameraman` for the permissions.
+-  Finally, all your Admins must inform the bot of their SteamID by using `/admin_link steamid:YourSteamIDhere`
 
 ### 3. PayPal Whitelist configuration
 You need to change the following:
