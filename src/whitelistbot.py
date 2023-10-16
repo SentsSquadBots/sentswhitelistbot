@@ -36,7 +36,7 @@ class MyGroup(app_commands.Group):
     ...
 group_SquadGroups = MyGroup(name="groups", description="Manage Squad in-game group permissions", default_permissions=discord.Permissions())
 group_PayPal = MyGroup(name="paypal", description="Commands for managing the PayPal integration.", default_permissions=discord.Permissions())
-group_Patreon = MyGroup(name="patreon", description="Commands for managing the Patreon integration.", default_permissions=discord.Permissions())
+group_MultiWL = MyGroup(name="multiwl", description="Commands for managing the Multi-WL feature.", default_permissions=discord.Permissions())
 group_Clans = MyGroup(name="clans", description="Commands for managing the Clans whitelist feature.", default_permissions=discord.Permissions())
 
 #####################################
@@ -57,7 +57,7 @@ class SquadClient(discord.Client):
             MY_GUILD = discord.Object(id=cfg['DiscordServer_ID'])
             if (cfg.get('featureEnable_SquadGroups', False)): self.tree.add_command(group_SquadGroups)
             if (cfg.get('featureEnable_Paypal', False)): self.tree.add_command(group_PayPal)
-            self.tree.add_command(group_Patreon)
+            self.tree.add_command(group_MultiWL)
             if (cfg.get('featureClanWhitelists', False)): self.tree.add_command(group_Clans)
             self.tree.copy_global_to(guild=MY_GUILD)
             await self.tree.sync(guild=MY_GUILD)
@@ -104,7 +104,7 @@ class SquadClient(discord.Client):
         To see the SteamIDs on your whitelist, click the 🏆 button.
         To see if someone else has your SteamID on *their* whitelist, click the 🔎 button.
         
-        You **must** have your Patreon linked to your Discord *(use the Link button below)*""")
+        You **must** have your Patreon linked to your Discord if you buy your whitelist via Patreon. *(use the Link button below)*""")
         embed.add_field(name="​", inline=False, value="Made with ♥ by <@177189581060308992>")
         try:
             view = ButtonWhitelistGatherView()
@@ -1186,7 +1186,7 @@ if (cfg.get('featureClanWhitelists', False)):
         await client.sendClanWhitelistPanel(channel.id)
 
 if (cfg.get('featurePatreonAudit', False)):
-    @group_Patreon.command()
+    @group_MultiWL.command()
     async def auditpatreon(interaction:discord.Interaction):
         """Combs through all the patreon subscribers, removes roles from those with declinded payments."""
 
@@ -1197,7 +1197,7 @@ if (cfg.get('featurePatreonAudit', False)):
         logging.info(declinedUsers)
         await message.edit(content=declinedUsers)  
 
-@group_Patreon.command()
+@group_MultiWL.command()
 @app_commands.describe(user_to_permit='User to permit.')
 async def permit(interaction: discord.Interaction, user_to_permit: discord.Member):
     """Allow a user to make another whitelist submission on the same day."""
@@ -1215,26 +1215,25 @@ async def permit(interaction: discord.Interaction, user_to_permit: discord.Membe
                 await interaction.response.send_message(user_to_permit.mention + " hasn't made a submission yet, no permit needed.")
         sqlite.commit()
 
-@group_Patreon.command()
-@app_commands.default_permissions(moderate_members=True)
+@group_MultiWL.command()
 async def sync(interaction: discord.Interaction):
     """Forces the whitelists on the server to update. Use sparingly."""
     await interaction.response.send_message("Syncing Patreon whitelists.")
     await client.updatePatreonWhitelists()
 
-@group_Patreon.command()
+@group_MultiWL.command()
 async def sendpanel(interaction: discord.Interaction, channel: discord.TextChannel):
-    """Sends the Whitelist Control Panel to the selected channel"""
+    """Sends the Multi-Whitelist Control Panel to the selected channel"""
     await interaction.response.send_message("Panel created", ephemeral=True)
     await client.sendWhitelistModal(channelID=channel.id)
 
-@group_Patreon.command()
+@group_MultiWL.command()
 async def whiteliststatus(interaction: discord.Interaction, user_to_check: discord.Member):
     """Check the whitelist status for a discord user."""
     description = "**Whitelist Status for Discord Member " + user_to_check.name + "**\n"+client.getWhitelistStatus(user_to_check.id, thirdPerson=True)
     await interaction.response.send_message(description)
 
-@group_Patreon.command()
+@group_MultiWL.command()
 async def editwhitelist(interaction: discord.Interaction, user_to_edit: discord.Member):
     """Make changes to a user's whitelist"""
     try:
