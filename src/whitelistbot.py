@@ -959,7 +959,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
     @client.tree.command()
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.describe(steamid='Your Steam64_ID, it should be exactly 17 numbers long.')
-    async def admin_link(interaction: discord.Interaction, steamid: str):
+    async def adminlink(interaction: discord.Interaction, steamid: str):
         """Link your SteamID for Squad in-game permissions."""
         if(not re.match(regex_SingleID, str(steamid))):
             await interaction.response.send_message(f"ERROR: `{steamid}`. is not a valid SteamID. It must be exactly 17 numbers long.", ephemeral=True)
@@ -975,7 +975,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
 
     @group_SquadGroups.command()
     @app_commands.describe(name='The group name. It must be unique. ')
-    async def create_group(interaction: discord.Interaction, name: str):
+    async def create(interaction: discord.Interaction, name: str):
         """Create a new permission group. WARNING: New groups require a server restart to apply."""
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
@@ -991,8 +991,8 @@ if (cfg.get('featureEnable_SquadGroups', False)):
     
     @group_SquadGroups.command()
     @app_commands.describe(name='The group name to delete. ')
-    async def remove_group(interaction: discord.Interaction, name:str):
-        """Delete a permissions group. WARNING: Cannot be undone."""
+    async def remove(interaction: discord.Interaction, name:str):
+        """Remove a permissions group. WARNING: Cannot be undone."""
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
                 rows = sqlitecursor.execute("SELECT groupName FROM squadGroups_Groups WHERE groupName = ?", (name,)).fetchone()
@@ -1007,7 +1007,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
                     await client.logMsg("SquadGroups", f"{interaction.user.mention} attempted to deleted group `{name}` but it doesn't exist.")
 
     @group_SquadGroups.command()
-    async def list_groups(interaction: discord.Interaction):
+    async def list(interaction: discord.Interaction):
         """Lists all groups"""
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
@@ -1021,7 +1021,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
 
     @group_SquadGroups.command()
     @app_commands.describe(group='The group name to link role to.', role='The role to link to the group.')
-    async def link_role_to_group(interaction: discord.Interaction, group:str, role:discord.Role):
+    async def link(interaction: discord.Interaction, group:str, role:discord.Role):
         """Link a Discord role to a group. Any user with that role will receive the group permissions. """
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
@@ -1042,7 +1042,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
 
     @group_SquadGroups.command()
     @app_commands.describe(group='The group name to unlink role from.', role='The role to unlink from the group.')
-    async def unlink_role_from_group(interaction: discord.Interaction, group:str, role:discord.Role):
+    async def unlink(interaction: discord.Interaction, group:str, role:discord.Role):
         """Unlink a Discord role from a group. Any user with that role will no longer receive the group permissions. """
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
@@ -1062,7 +1062,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
                     await client.logMsg("SquadGroups", f"{interaction.user.mention} attempted to unlink role {role.mention} from group `{group}` but it isn't linked.")
                     
     @group_SquadGroups.command()
-    async def get_admin_steamid(interaction: discord.Interaction, user: discord.User):
+    async def viewsteamid(interaction: discord.Interaction, user: discord.User):
         """View the SteamID linked to a Discord user. """
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
@@ -1074,7 +1074,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
         await client.logMsg("SquadGroups", f"{interaction.user.mention} requested {user.mention}'s steamID")
 
     @group_SquadGroups.command()
-    async def set_admin_steamid(interaction: discord.Interaction, user: discord.User, steamid: str):
+    async def setsteamid(interaction: discord.Interaction, user: discord.User, steamid: str):
         """Set the SteamID linked for a Discord user. """
         if(not re.match(regex_SingleID, str(steamid))):
             await interaction.response.send_message(f"ERROR: `{steamid}`. is not a valid SteamID. It must be exactly 17 numbers long.")
@@ -1091,7 +1091,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
 
     @group_SquadGroups.command()
     @app_commands.describe(groupname='The group name to view.')
-    async def view_group(interaction: discord.Interaction, groupname:str):
+    async def view(interaction: discord.Interaction, groupname:str):
         """View the permissions for a group, and the roles linked to the group. """
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
@@ -1114,7 +1114,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
 
     @group_SquadGroups.command()
     @app_commands.describe(groupname='The group name to edit permissions for.')
-    async def edit_group_permissions(interaction: discord.Interaction, groupname:str):
+    async def edit(interaction: discord.Interaction, groupname:str):
         """Edit the permissions for a group. """
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
@@ -1127,7 +1127,7 @@ if (cfg.get('featureEnable_SquadGroups', False)):
                     await client.logMsg("SquadGroups", f"{interaction.user.mention} attempted to edit permissions for group `{groupname}` but it doesn't exist.")
 
     @group_SquadGroups.command()
-    async def list_valid_permissions(interaction: discord.Interaction):
+    async def allpermissions(interaction: discord.Interaction):
         """List all the valid squad permissions"""
         await interaction.response.send_message("""```
 changemap
@@ -1151,7 +1151,7 @@ canseeadminchat  - This group can see the admin chat and teamkill/admin join not
 ```""")
 
     @group_SquadGroups.command()
-    async def edit_manualentries(interaction: discord.Interaction):
+    async def manualentries(interaction: discord.Interaction):
         """Edit one-off manual permissions"""
         manualPermissions = ""
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
@@ -1164,7 +1164,7 @@ canseeadminchat  - This group can see the admin chat and teamkill/admin join not
 
 if (cfg.get('featureClanWhitelists', False)):
     @group_Clans.command()
-    async def clanwhiteliststatus(interaction: discord.Interaction, role: discord.Role):
+    async def whiteliststatus(interaction: discord.Interaction, role: discord.Role):
         """Check the whitelist status for a Role."""
         if str(role.id) not in cfg['clanWhitelists'].keys():
             await interaction.response.send_message(f"Error. {role.name} is not a valid {cfg['clanMoniker']} role.")
@@ -1173,7 +1173,7 @@ if (cfg.get('featureClanWhitelists', False)):
         await interaction.response.send_message(description)
 
     @group_Clans.command()
-    async def editclanwhitelist(interaction: discord.Interaction, role: discord.Role):
+    async def editwhitelist(interaction: discord.Interaction, role: discord.Role):
         """Make changes to a user's whitelist"""
         try:
             maxWhitelists = 0
