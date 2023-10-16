@@ -63,9 +63,7 @@ Follow the steps above inside of WSL.
 If you want to run the bot without Docker, you will need to install Python and all the packages from `requirements.txt` yourself, plus you will need to serve the cfg files as well.
 
 ## Limit Command Usage
-The bot has multiple /slashcommands. The public members of your server should not have access to these commands. **You must ensure the bot's commands are only accessible to your admins**
-
-Go into your server's settings -> Integrations -> find the bot, and disable @everyone from using the commands
+The bot has multiple /slashcommands. The public members of your server should not have access to these commands. By default all commands will only be useable by server administrators. If you would like to allow specific roles to use the commands, go into your server's settings -> Integrations -> and add roles or members to the different command groups.
 
 ![Disable Command Access](https://i.imgur.com/ZoNavuU.png)
 
@@ -101,18 +99,21 @@ These are the minimum variables you need to change:
 - `log_channel_ID= "0"`
 
 ### 1. Multi-Whitelist configuration
-You need to change the following:
-- `whitelistDiscordRoleWhitelists= "{}"`
-  - Must include the ID of a Discord role and the number of whitelists that role is allowed.
-  - Example with a role allowed 2 whitelists: `"{'1064951253131599882':2}"`
-  - Example with multiple roles with different number of whitelists: `"{'1064951253131599882':2, '110123213232132122':5}"`
+The basic configuration for this feature is configured in Discord using the `/multiwl` set of commands. This feature is always available, but if you don't want to use it simply don't configure it or send the panel anywhere.
+
+An example setup:
+- `/multiwl linkrole role:@whitelist-1 maxwhitelists:1`
+- `/multiwl linkrole role:@whitelist-2 maxwhitelists:2`
+- `/multiwl sendpanel channel:#whitelist`
+
+Users can now self-manage their whitelists in the channel you sent the Panel to. You can automate **Patreon Tiers** by making Patreon assign a different specific role to each tier, then link that role with a number of whitelists. That way, when a user subscribes on Patreon, they will get a certain number of whitelists depending on what tier they subscribe to.
 
 ### 2. Squad Groups configuration
-You need to change the following:
+You need to change the following environment variable:
 - `featureEnable_SquadGroups= "false"`
   - set to `"true"` to use this feature.
 
-All remaining configuration is done with /slashcommands from within Discord. See the `/groups` set of commands from the bot. An example for setting up an Admin group:
+All remaining configuration is done in Discord with the `/groups` set of commands. An example for setting up an Admin group:
 - `/groups create_group name:Admin`
 - `/groups link_role_to_group group:Admin role:@Admin`
 - `/groups edit_group_permissions groupname:Admin`
@@ -120,7 +121,7 @@ All remaining configuration is done with /slashcommands from within Discord. See
 -  Finally, all your Admins must inform the bot of their SteamID by using `/admin_link steamid:YourSteamIDhere`
 
 ### 3. PayPal Whitelist configuration
-You need to change the following:
+You need to change the following environment variables:
 - `featureEnable_Paypal= "false"`
    - set to `"true"` to use this feature.
 - `paypal_clientID= "XXXX"`
@@ -135,7 +136,7 @@ You need to change the following:
   - Format examples: single role: `"[1064951253131599882]"` , multiple roles: `"[1064951253131599882, 110123213232132122]"`
 
 ### 4. Clan Whitelist configuration
-You need to change the following:
+You need to change the following environment variables:
 - `featureClanWhitelists= "false"`
    - set to `"true"` to use this feature.
 - `clanWhitelists= "{}"`
