@@ -50,7 +50,7 @@ class SquadClient(discord.Client):
 
     async def on_ready(self):
         logging.info(f'Logged on as {self.user}!')
-        await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='Whitelist Management'))
+        await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='Squad Permissions'))
         self.isReady = True
         logging.info("Syncing commands... Please wait.")
         try:
@@ -224,13 +224,17 @@ class SquadClient(discord.Client):
         numWhitelists = 0
         if (cfg['whitelistsNeedThisDiscordRoleID'] != 0 and CDDiscordServer.get_role(cfg['whitelistsNeedThisDiscordRoleID']) not in membersRoles):
             return 0 # Member doesn't have the required role
-        rolesDict = cfg['whitelistDiscordRoleWhitelists']
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                rolesRows = sqlitecursor.execute("SELECT roleID,numWhitelists FROM multiwl_RolesWhitelists").fetchall()
+        rolesDict = {}
+        for role,num in rolesRows:
+            rolesDict.setdefault(role,num)
         for role in membersRoles:
             if str(role.id) in rolesDict:
                 tmp = rolesDict[str(role.id)]
                 if tmp > numWhitelists:
                     numWhitelists = tmp
-        
         return numWhitelists
     
     def getWhitelistStatus(self, discordID, thirdPerson = False):
@@ -330,54 +334,54 @@ class SquadClient(discord.Client):
         return f"Finished in {int(datetime.now().timestamp())-startSeconds} seconds"
 
     ## Loops through the declined Patreon subs, and removes that users' Discord roles
-    async def auditPatreonDeclined(self):
-        api_client = patreon.API(cfg['patreonAccessToken'])
-        # Get the campaign ID
-        campaign_response = api_client.fetch_campaign()
-        api_client.fetch_user()
-        campaign_id = campaign_response.data()[0].id()
+    # async def auditPatreonDeclined(self):
+    #     api_client = patreon.API(cfg['patreonAccessToken'])
+    #     # Get the campaign ID
+    #     campaign_response = api_client.fetch_campaign()
+    #     api_client.fetch_user()
+    #     campaign_id = campaign_response.data()[0].id()
 
-        # Fetch all pledges
-        cursor = None
-        declinedUsers = "Users with declined payments:\n"
-        declinedUsersIDs = []
-        while True:
-            pledges_response = api_client.fetch_page_of_pledges(campaign_id, 25, cursor=cursor)
-            pledges = pledges_response.data()
+    #     # Fetch all pledges
+    #     cursor = None
+    #     declinedUsers = "Users with declined payments:\n"
+    #     declinedUsersIDs = []
+    #     while True:
+    #         pledges_response = api_client.fetch_page_of_pledges(campaign_id, 25, cursor=cursor)
+    #         pledges = pledges_response.data()
 
-            for pledge in pledges:
-                patron_id = pledge.relationship('patron').id()
-                patron = pledges_response.find_resource_by_type_and_id('user', patron_id)
+    #         for pledge in pledges:
+    #             patron_id = pledge.relationship('patron').id()
+    #             patron = pledges_response.find_resource_by_type_and_id('user', patron_id)
 
-                disc = patron.json_data['attributes']['social_connections']['discord']
-                discID = 0
-                declined = False
-                if (disc is not None): 
-                    discID = disc['user_id']
-                if pledge.json_data['attributes']['declined_since'] is not None: declined = True
+    #             disc = patron.json_data['attributes']['social_connections']['discord']
+    #             discID = 0
+    #             declined = False
+    #             if (disc is not None): 
+    #                 discID = disc['user_id']
+    #             if pledge.json_data['attributes']['declined_since'] is not None: declined = True
                 
-                if (declined == True):
-                    declinedUsers += "<@" + str(discID) + ">\n" 
-                    if (discID != 0): declinedUsersIDs.append(discID)
+    #             if (declined == True):
+    #                 declinedUsers += "<@" + str(discID) + ">\n" 
+    #                 if (discID != 0): declinedUsersIDs.append(discID)
 
-            cursor = api_client.extract_cursor(pledges_response)
-            if not cursor:
-                break
-        guild = client.get_guild(cfg['DiscordServer_ID'])
-        rolesToRemove = []
-        for roleID in list(cfg['whitelistDiscordRoleWhitelists'].keys()):
-            rolesToRemove.append(guild.get_role(int(roleID)))
+    #         cursor = api_client.extract_cursor(pledges_response)
+    #         if not cursor:
+    #             break
+    #     guild = client.get_guild(cfg['DiscordServer_ID'])
+    #     rolesToRemove = []
+    #     for roleID in list(cfg['whitelistDiscordRoleWhitelists'].keys()): 
+    #         rolesToRemove.append(guild.get_role(int(roleID)))
 
-        # for declinedUserID in declinedUsersIDs:
-        #     try:
-        #         declinedMember = guild.get_member(int(declinedUserID))
-        #         # for roleToRemove in rolesToRemove:
-                    #await declinedMember.remove_roles(roleToRemove)
-        #     except: 
-        #         # await self.logMsg("Patreon Audit", "Cannot remove roles from discord user <@" + str(declinedUserID) + ">")
-        #         pass
+    #     # for declinedUserID in declinedUsersIDs:
+    #     #     try:
+    #     #         declinedMember = guild.get_member(int(declinedUserID))
+    #     #         # for roleToRemove in rolesToRemove:
+    #                 #await declinedMember.remove_roles(roleToRemove)
+    #     #     except: 
+    #     #         # await self.logMsg("Patreon Audit", "Cannot remove roles from discord user <@" + str(declinedUserID) + ">")
+    #     #         pass
 
-        return declinedUsers
+    #     return declinedUsers
 
     def getClanMemberRole(self, discordMember: discord.Member):
         for role in discordMember.roles:
@@ -672,9 +676,9 @@ class modal_EditWhitelists(ui.Modal, title='Edit your Whitelists!'):
             res = client.recordSteamIDs(steamIDStr, interaction.user.id, interaction.user.name, force=self.isAdminEditing)
         await interaction.response.send_message(res, ephemeral=not self.isAdminEditing)
         if(self.isAdminEditing):
-            await client.logMsg("Whitelist", "<@"+str(interaction.user.id)+"> edited the whitelist for " +"<@"+str(self.adminIsEditingID)+ "> and entered `" + str(self.whitelists) + "` and got msg: \n`" + str(res)+"`")
+            await client.logMsg("MultiWhitelist", "<@"+str(interaction.user.id)+"> edited the whitelist for " +"<@"+str(self.adminIsEditingID)+ "> and entered `" + str(self.whitelists) + "` and got msg: \n`" + str(res)+"`")
         else:
-            await client.logMsg("Whitelist", "<@"+str(interaction.user.id) +"> ("+str(interaction.user.name)+ ") entered `" + str(self.whitelists) + "` and got msg: \n`" + str(res)+"`")
+            await client.logMsg("MultiWhitelist", "<@"+str(interaction.user.id) +"> ("+str(interaction.user.name)+ ") entered `" + str(self.whitelists) + "` and got msg: \n`" + str(res)+"`")
 
 class modal_SearchWhitelistForID(ui.Modal, title='Enter the SteamID to search for'):
     def __init__(self):
@@ -1245,6 +1249,38 @@ async def editwhitelist(interaction: discord.Interaction, user_to_edit: discord.
         logging.error(e)
         traceback.print_stack()
 
+@group_MultiWL.command()
+async def linkrole(interaction: discord.Interaction, role: discord.Role, maxwhitelists: int):
+    """Give a role a number of Whitelists users can self-manage."""
+    if (maxwhitelists < 1):
+        await interaction.response.send_message(f"Error: `{maxwhitelists}` must be greater than zero.", ephemeral=True)
+        return
+    await interaction.response.send_message(f"Members with {role.mention} can now put up to `{maxwhitelists}` steamIDs on their personal whitelist.", ephemeral=True)
+    await client.logMsg("MultiWhitelist", f"{interaction.user.mention} updated {role.mention} to max of `{maxwhitelists}` WLs.")
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            sqlitecursor.execute("INSERT INTO multiwl_RolesWhitelists(roleID,numWhitelists) VALUES(?,?) ON CONFLICT(roleID) DO UPDATE SET numWhitelists=?", (str(role.id),maxwhitelists,maxwhitelists))
+        sqlite.commit()
+
+@group_MultiWL.command()
+async def listroles(interaction: discord.Interaction):
+    """List all roles with configured multi-whitelist slots."""
+    rolesStr = '__All Roles with multi-whitelist slots:__\n'
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            for roleID,numWhitelists in sqlitecursor.execute("SELECT roleID,numWhitelists FROM multiwl_RolesWhitelists").fetchall():
+                rolesStr += f"<@&{roleID}>: max `{numWhitelists}` SteamIDs\n"
+    await interaction.response.send_message(content=rolesStr.strip('\n'))
+
+@group_MultiWL.command()
+async def unlinkrole(interaction: discord.Interaction, role: discord.Role):
+    """Unlink a role from having any whitelists."""
+    await interaction.response.send_message(f"Members with {role.mention} will no longer receive any whitelist slots.", ephemeral=True)
+    await client.logMsg("MultiWhitelist", f"{interaction.user.mention} unlinked {role.mention}. ")
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            sqlitecursor.execute("DELETE FROM multiwl_RolesWhitelists WHERE roleID=?", (str(role.id), ))
+        sqlite.commit()
 ################ END COMMANDS ################
 
 def getPayPalStatus(discordID:int):
@@ -1515,6 +1551,8 @@ async def main():
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             # Create database if it doesn't exist
+            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS multiwl_RolesWhitelists (roleID TEXT NOT NULL PRIMARY KEY, numWhitelists INTEGER NOT NULL )")
+
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS whitelistSteamIDs (discordID TEXT NOT NULL, steamID TEXT NOT NULL, discordName TEXT DEFAULT ' ', changedOnEpoch INTEGER NOT NULL DEFAULT 0 )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS clanSteamIDs (roleID TEXT NOT NULL, steamID TEXT NOT NULL, discordID TEXT NOT NULL )")
             
@@ -1527,7 +1565,14 @@ async def main():
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS paypal_Whitelists ( discordID TEXT NOT NULL PRIMARY KEY, steamID TEXT NOT NULL, expires INTEGER NOT NULL )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS paypal_PendingTransactions ( discordID TEXT NOT NULL PRIMARY KEY, email TEXT NOT NULL, timestamp INTEGER NOT NULL )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS paypal_UsedTransactions ( discordID TEXT NOT NULL, transactionID TEXT NOT NULL PRIMARY KEY, timestamp INTEGER NOT NULL )")
-            sqlite.commit()
+
+            # If there's an ENV var for the whitelist role, and there aren't any records in the DB, migrate the ENV var to the DB.
+            if (len(cfg['whitelistDiscordRoleWhitelists']) > 0):
+                if (len(sqlitecursor.execute("SELECT roleID FROM multiwl_RolesWhitelists").fetchall()) == 0):
+                    logging.info("Migrating MultiWL roles to database.")
+                    for roleID,numWL in cfg['whitelistDiscordRoleWhitelists'].items():
+                        sqlitecursor.execute("INSERT INTO multiwl_RolesWhitelists(roleID,numWhitelists) VALUES(?,?)", (str(roleID),numWL))
+        sqlite.commit()
 
     logging.info('database loaded')
     async with client:
