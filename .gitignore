@@ -2,3 +2,5 @@
 importscript/sqlite.db
 .env
 adminconfig
+*.cfg
+*.db

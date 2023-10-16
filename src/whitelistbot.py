@@ -34,10 +34,10 @@ logging.basicConfig(
 
 class MyGroup(app_commands.Group):
     ...
-group_SquadGroups = MyGroup(name="groups", description="Manage Squad in-game group permissions")
-group_PayPal = MyGroup(name="paypal", description="Commands for managing the PayPal integration.")
-group_Patreon = MyGroup(name="patreon", description="Commands for managing the Patreon integration.")
-group_Clans = MyGroup(name="clans", description="Commands for managing the Clans whitelist feature.")
+group_SquadGroups = MyGroup(name="groups", description="Manage Squad in-game group permissions", default_permissions=discord.Permissions())
+group_PayPal = MyGroup(name="paypal", description="Commands for managing the PayPal integration.", default_permissions=discord.Permissions())
+group_Patreon = MyGroup(name="patreon", description="Commands for managing the Patreon integration.", default_permissions=discord.Permissions())
+group_Clans = MyGroup(name="clans", description="Commands for managing the Clans whitelist feature.", default_permissions=discord.Permissions())
 
 #####################################
 ######### CLASS SquadClient #########
@@ -894,6 +894,7 @@ if (cfg.get('featureEnable_Paypal', False)):
 
 if (cfg.get('featureEnable_PickMonthlyWhitelists', False)):
     @client.tree.command()
+    @app_commands.default_permissions(moderate_members=True)
     async def pickmonthlywhitelists(interaction: discord.Interaction, howmany:int):
         """Picks a number of steamIDs from the current thread and automatically gives them whitelist on the server. """
         try:
@@ -956,6 +957,7 @@ if (cfg.get('featureEnable_PickMonthlyWhitelists', False)):
 
 if (cfg.get('featureEnable_SquadGroups', False)):
     @client.tree.command()
+    @app_commands.default_permissions(moderate_members=True)
     @app_commands.describe(steamid='Your Steam64_ID, it should be exactly 17 numbers long.')
     async def admin_link(interaction: discord.Interaction, steamid: str):
         """Link your SteamID for Squad in-game permissions."""
@@ -1229,6 +1231,7 @@ async def permit(interaction: discord.Interaction, user_to_permit: discord.Membe
         sqlite.commit()
 
 @group_Patreon.command()
+@app_commands.default_permissions(moderate_members=True)
 async def sync(interaction: discord.Interaction):
     """Forces the whitelists on the server to update. Use sparingly."""
     await interaction.response.send_message("Syncing Patreon whitelists.")
