@@ -114,11 +114,11 @@ You need to change the following environment variable:
   - set to `"true"` to use this feature.
 
 All remaining configuration is done in Discord with the `/groups` set of commands. An example for setting up an Admin group:
-- `/groups create_group name:Admin`
-- `/groups link_role_to_group group:Admin role:@Admin`
-- `/groups edit_group_permissions groupname:Admin`
+- `/groups create name:Admin`
+- `/groups link group:Admin role:@Admin`
+- `/groups edit groupname:Admin`
   - Paste in `reserve,balance,chat,canseeadminchat,teamchange,forceteamchange,cameraman` for the permissions.
--  Finally, all your Admins must inform the bot of their SteamID by using `/admin_link steamid:YourSteamIDhere`
+-  Finally, all your Admins must inform the bot of their SteamID by using `/adminlink steamid:YourSteamIDhere`
 
 ### 3. PayPal Whitelist configuration
 You need to change the following environment variables:
