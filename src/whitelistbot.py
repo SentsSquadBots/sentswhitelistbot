@@ -455,21 +455,6 @@ class SquadClient(discord.Client):
         except: 
             description += "\n`" + ', '.join(steamIDs) + ' `'
         return description    
-
-    def getSetting(self, key):
-        value = None
-        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-            with closing(sqlite.cursor()) as sqlitecursor:
-                rows = sqlitecursor.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-                if (rows is not None and len(rows) > 0):
-                    value = rows[0]
-        return value
-    
-    def setSetting(self, key, value):
-        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-            with closing(sqlite.cursor()) as sqlitecursor:
-                sqlitecursor.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?", (key, value, value)).fetchone()
-                sqlite.commit()
     
     async def logMsg(self, title, message):
         if (cfg['do_log'] == False):
@@ -1531,7 +1516,6 @@ async def main():
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             # Create database if it doesn't exist
-            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL)")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS whitelistSteamIDs (discordID TEXT NOT NULL, steamID TEXT NOT NULL, discordName TEXT DEFAULT ' ', changedOnEpoch INTEGER NOT NULL DEFAULT 0 )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS clanSteamIDs (roleID TEXT NOT NULL, steamID TEXT NOT NULL, discordID TEXT NOT NULL )")
             
