@@ -37,8 +37,8 @@ I also suggest adding yourself to the `docker` group so you can use Docker witho
 Once Docker is installed, all you need to do to run the bot is:
 1. Create a folder for the bot's files to live -> `cd ~ && mkdir whitelistbot && cd whitelistbot`
 2. Download the compose file -> `wget https://raw.githubusercontent.com/SentsSquadBots/sentswhitelistbot/main/compose.yml`
-3. Download the example .env file -> `wget https://raw.githubusercontent.com/SentsSquadBots/sentswhitelistbot/main/exampleENV.env -O bot.env`
-4. Edit the `bot.env` file, see [Configuration](#configuration)
+3. Download the example .env file -> `wget https://raw.githubusercontent.com/SentsSquadBots/sentswhitelistbot/main/exampleENV.env -O .env`
+4. Edit the `.env` file -> `nano .env` see [Configuration](#configuration)
 3. Start the bot -> `docker compose up -d`
 
 ### Update it
