@@ -57,6 +57,8 @@ To check the logs:
 If you want to run on this on Windows, you can install Docker Desktop and WSL:
 - Install Docker: https://docs.docker.com/desktop/install/windows-install/
 - Install WSL: in an admin powershell: `wsl --install`
+- Ensure in your Docker Desktop settings you enable WSL Integration
+![dd](https://i.imgur.com/aVhKuKo.png)
 
 Follow the steps above inside of WSL.
 
@@ -91,7 +93,7 @@ These are the minimum variables you need to change:
 - `DiscordServer_ID= "0"`
   - Enable Developer Mode under Discord Advanced settings, right-click your server -> Copy Server ID
 - `discord_token= "XXXXX"`
-  - Get token from https://discord.com/developers/
+  - Get token from https://discord.com/developers/ See [Getting a Discord Token](#getting-a-discord-token)
 - `steam_API_key= "XXXX1234"`
   - Get from https://steamcommunity.com/dev/apikey
 - `do_log= "false"`
@@ -142,3 +144,23 @@ You need to change the following environment variables:
 - `clanWhitelists= "{}"`
   - format example: `"{'1066815293885780038':{'numWhitelists': 20}}"`. This would give the clan role 1066815293885780038 20 whitelists that anyone with that role can edit.
   - example with multiple clans: `"{'1066815293885780038':{'numWhitelists': 20}, '110123213232132122':{'numWhitelists': 10}}"`
+
+## Getting a Discord Token
+In order to use the bot, you need to create a Discord Application, add a bot user, create a bot token, and finally invite the bot to your Discord server.
+
+- Go to https://discord.com/developers/applications
+- Click `New Application` button
+- Name it whatever you want, example: `WhitelistBot`
+- Click `Bot` on the left, then click `Reset Token`
+- Copy this token, it goes in the `discord_token` variable in your .env file
+- Click `OAuth2` on the left, then `URL Generator`
+- Select the following Scopes: 
+  - `bot`
+  - `applications.commands`
+- Select the following Bot Permissions:
+  - `Send Messages`
+  - `Read Messages/View Channels`
+  - `Embed Links`
+  - `Use Slash Commands`
+- Click `Copy` next to the Generated URL at the bottom, and paste it into your web browser to add the bot to your Discord server.
+- Ensure the newly added bot has the required permissions in your Discord in order to send messages in all your channels. 
