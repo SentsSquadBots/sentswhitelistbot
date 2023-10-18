@@ -41,9 +41,11 @@ Once Docker is installed, all you need to do to run the bot is:
 4. Edit the `.env` file -> `nano .env` see [Configuration](#configuration)
 3. Start the bot -> `docker compose up -d`
 
-### Update it
-To update the bot with the latest release:
+### Restart it
+`docker compose restart` from within the folder with the compose.yml -or- `docker restart whitelistbot`
 
+### Update it
+To update the bot with the latest release, run from within the folder with the compose.yml:
 1. `docker compose down`
 2. `docker compose pull`
 3. `docker compose up -d`
@@ -153,6 +155,7 @@ In order to use the bot, you need to create a Discord Application, add a bot use
 - Name it whatever you want, example: `WhitelistBot`
 - Click `Bot` on the left, then click `Reset Token`
 - Copy this token, it goes in the `discord_token` variable in your .env file
+- Under the `Privileged Gateway Intents` section, turn on all the Intents (Presence, Server Members, and Message Content)
 - Click `OAuth2` on the left, then `URL Generator`
 - Select the following Scopes: 
   - `bot`
