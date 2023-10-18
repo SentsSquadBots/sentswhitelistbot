@@ -10,7 +10,9 @@ services:
   whitelistbot:
     image: ghcr.io/sentssquadbots/sentswhitelistbot:latest
     container_name: whitelistbot
-    restart: always   
+    restart: always
+    env_file:
+      - .env    
     volumes:
       - ${host_db_folder}:${container_db_folder}
       - ${host_cfg_folder}:${container_cfg_folder}
