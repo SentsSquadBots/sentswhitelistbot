@@ -970,6 +970,18 @@ if (cfg.get('featureEnable_SquadGroups', False)):
             sqlite.commit()
         await client.logMsg("SquadGroups", f"{interaction.user.mention} linked their steamID to `{steamid}`")
 
+    @client.tree.command()
+    @app_commands.default_permissions(moderate_members=True)
+    @app_commands.describe(steamid='Your Steam64_ID, it should be exactly 17 numbers long.')
+    async def adminunlink(interaction: discord.Interaction):
+        """Unlink your SteamID, you will lose in-game permissions."""
+        await interaction.response.send_message(f"Your SteamID is has been unlinked, in-game permissions will be lost on map swap.", ephemeral=True)
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                sqlitecursor.execute("DELETE FROM squadGroups_SteamIDs WHERE discordID = ?", (str(interaction.user.id),))
+            sqlite.commit()
+        await client.logMsg("SquadGroups", f"{interaction.user.mention} unlinked their steamID.")
+
     @group_SquadGroups.command()
     @app_commands.describe(name='The group name. It must be unique. ')
     async def create(interaction: discord.Interaction, name: str):
