@@ -1,7 +1,18 @@
 #
 # Written by @Sentennial
 # Discord ID: 177189581060308992
-# TODO: optionally warn players when they join with their seed points?
+# TODO: should players be able to freely link to any steamID? Would this be abused? Use an in-game chat verification code method instead?
+# TODO: optionally warn players when they join with their seed points/days? Need option with default - seed_ingamewarn
+# TODO: add discord logging for actions
+# TODO: option for monthly point wipe, delete all from seeding_Users - seed_monthlywipe
+# TODO: Create front-end panel with status and buttons
+#       Show on embed: threshold, pointworth, adminsaccrue, minplayers, maxplayers, pointcap
+#       Automatically update the embed when settings are changed 
+#       Buttons:
+#           Status: Show user's points and worth in days, and if they're banking
+#           Link: link discordID to steamID
+#           AutoRedeem: toggle user's isBanking
+#           Redeem: If user's points are > threshold, allow to redeem X days worth of points and apply to whitelist
 
 import discord
 import os
@@ -15,6 +26,7 @@ import aiocron
 import patreon
 import random
 import socket
+import math
 from rcon.source import rcon as rcon
 from discord import app_commands
 from discord import ui
@@ -652,6 +664,7 @@ cfg['paypal_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.
 cfg['monthlyWhitelists_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('monthlyWhitelists_outputFile', 'monthlyWLs.cfg'))
 cfg['squadGroups_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('squadGroups_outputFile', 'squadadmins.cfg'))
 cfg['multiwl_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('multiwl_outputFile', 'multiWLs.cfg'))
+cfg['seeding_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('seeding_outputFile', 'seedingWLs.cfg'))
 
 cfg['clanMoniker']=os.getenv('clanMoniker', 'Clan')
 cfg['pathToClanWhitelist']=os.getenv('pathToClanWhitelist', 'clanWLs.cfg')
@@ -980,7 +993,6 @@ if (cfg.get('featureEnable_SquadGroups', False)):
 
     @client.tree.command()
     @app_commands.default_permissions(moderate_members=True)
-    @app_commands.describe(steamid='Your Steam64_ID, it should be exactly 17 numbers long.')
     async def adminunlink(interaction: discord.Interaction):
         """Unlink your SteamID, you will lose in-game permissions."""
         await interaction.response.send_message(f"Your SteamID is has been unlinked, in-game permissions will be lost on map swap.", ephemeral=True)
@@ -1398,9 +1410,24 @@ if (cfg.get('featureEnable_Seeding', False)):
         setSetting('seed_pointcap', str(abs(pointcap)))
 
     @group_Seeding.command()
+    async def deduct(interaction: discord.Interaction, user:discord.User, points:int):
+        """Deduct seeding points from a user."""
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                pointsRow = sqlitecursor.execute("SELECT points FROM seeding_Users WHERE discordID = ?", (user.id,)).fetchone()
+                if (not pointsRow):
+                    await interaction.response.send_message(f"Error, {user.mention} has not linked their steamID to the Seeding Feature.", ephemeral=True)
+                    return
+                finalpoints = pointsRow[0] - abs(points)
+                if finalpoints < 0: finalpoints = 0
+                sqlitecursor.execute("UPDATE seeding_Users SET points = ? WHERE discordID = ?", (finalpoints, user.id))
+            sqlite.commit()
+        await interaction.response.send_message(f"{user.mention}'s points are now `{finalpoints}`", ephemeral=True)
+
+    @group_Seeding.command()
     async def debug(interaction: discord.Interaction, ):
         await interaction.response.send_message(f"boop", ephemeral=True)
-        await checkSeeders()
+        await autoSeeding()
 ################ END COMMANDS ################
 
 def getSettingS(key:str, default = None):
@@ -1436,6 +1463,68 @@ def setSetting(key:str, val):
         with closing(sqlite.cursor()) as sqlitecursor:
             sqlitecursor.execute("INSERT INTO keyvals(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=?", (key,str(val),str(val)))
         sqlite.commit()
+
+async def seedingAssignPoints():
+    """Assign 1 point to every player on each server if that server meets the seeding requirements."""
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            # Check each server to see if they're seeding
+            for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
+                try:
+                    ip, port = ipandport.split(':')
+                    currentmapResp = await rcon('showcurrentmap', host=ip, port=int(port), passwd=password)
+                    # Check if we're currently on a seed map
+                    if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
+                        seedSteamIDs = getSteamIDsFromRconResp(await rcon('listplayers', host=ip, port=int(port), passwd=password))
+                        # If the playercount is outside the threshold of min and max players, don't assign any points
+                        if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
+                            logging.info(f"We're on a seed layer but player count outside of range")
+                            continue
+                        logging.info(f"Current seeders: {seedSteamIDs}")
+                        # Give all players 1 seeding point
+                        for steamID in seedSteamIDs:
+                            pointRow = sqlitecursor.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,)).fetchone()
+                            if (not pointRow):
+                                isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
+                                sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?)", (steamID,None,isBanking,1))
+                            else:
+                                pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
+                                if (pointCap == 0 or pointRow[0] < pointCap):
+                                    sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
+
+                except: continue
+        sqlite.commit()
+
+def seedingPurgeExpiredWLs():
+    """Look through the seeding whitelists and remove any expired ones"""
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            sqlitecursor.execute("DELETE FROM seeding_Whitelists WHERE expires < ?", (int(datetime.now().timestamp()),))
+        sqlite.commit()
+
+def seedingAutoRedeem():
+    """Get all users where points > seed_threshold and isBanking is 0, and redeem their WL."""
+    seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
+    seed_pointworth = getSettingI('seed_pointworth', Defaults['seed_pointworth'])
+    ts_now = int(datetime.now().timestamp())
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            rows = sqlitecursor.execute("SELECT steamID,discordID,isBanking,points FROM seeding_Users WHERE points >= ? AND isBanking = 0", (seed_threshold,)).fetchall()
+            for steamID,discordID,isBanking,points in rows:
+                secondsToAdd = int((datetime.now() + timedelta(days= points*seed_pointworth )).timestamp()) - int(datetime.now().timestamp())
+                sqlitecursor.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (steamID, ts_now + secondsToAdd,secondsToAdd))
+                sqlitecursor.execute("UPDATE seeding_Users SET points = 0 WHERE steamID = ?", (steamID,))
+        sqlite.commit()
+
+def seedingGenerateCFG():
+    whitelistStr = 'Group=SeedingWL:reserve\n'
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            for steamID,expires in sqlitecursor.execute("SELECT steamID,expires FROM seeding_Whitelists").fetchall():
+                whitelistStr += f"Admin={steamID}:SeedingWL // Expires on TS {expires}\n"
+        
+    with open(cfg['seeding_outputFile'], "w") as f:
+        f.write(whitelistStr)
 
 def getPayPalStatus(discordID:int):
     description = ''
@@ -1719,36 +1808,13 @@ if (cfg.get('featureEnable_Paypal', False)):
             f.write(whitelistsStr)
 
 if (cfg.get('featureEnable_Seeding', False)):
-    #@aiocron.crontab("* * * * * 15")
-    async def checkSeeders():
-        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-            with closing(sqlite.cursor()) as sqlitecursor:
-                # Check each server to see if they're seeding
-                for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
-                    try:
-                        ip, port = ipandport.split(':')
-                        currentmapResp = await rcon('showcurrentmap', host=ip, port=int(port), passwd=password)
-                        # Check if we're currently on a seed map
-                        if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
-                            seedSteamIDs = getSteamIDsFromRconResp(await rcon('listplayers', host=ip, port=int(port), passwd=password))
-                            # If the playercount is outside the threshold of min and max players, don't assign any points
-                            if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
-                                logging.info(f"We're on a seed layer but player count outside of range")
-                                continue
-                            logging.info(f"Current seeders: {seedSteamIDs}")
-                            # Give all players 1 seeding point
-                            for steamID in seedSteamIDs:
-                                pointRow = sqlitecursor.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,)).fetchone()
-                                if (not pointRow):
-                                    isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
-                                    sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?)", (steamID,None,isBanking,1))
-                                else:
-                                    pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
-                                    if (pointCap == 0 or pointRow[0] < pointCap):
-                                        sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
+    #@aiocron.crontab("* * * * * 15") # Runs every 15th second of every minute
+    async def autoSeeding():
+        # await seedingAssignPoints()
+        seedingAutoRedeem()
+        seedingPurgeExpiredWLs()
+        seedingGenerateCFG()
 
-                    except: continue
-            sqlite.commit()
 
 async def main():
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
@@ -1771,6 +1837,7 @@ async def main():
 
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Servers (ipandport TEXT NOT NULL PRIMARY KEY, password TEXT NOT NULL )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Users (steamID TEXT NOT NULL PRIMARY KEY, discordID TEXT, isBanking INTEGER NOT NULL, points INTEGER NOT NULL DEFAULT 0 )")
+            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Whitelists (steamID TEXT NOT NULL PRIMARY KEY, expires INTEGER NOT NULL )")
             
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS keyvals (key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL )")
             
