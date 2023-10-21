@@ -1,9 +1,7 @@
 #
 # Written by @Sentennial
 # Discord ID: 177189581060308992
-# TODO: optional point cap?
 # TODO: optionally warn players when they join with their seed points?
-# TODO: enum for default settings instead of having to manually express the default every time you call getsetting()
 
 import discord
 import os
@@ -26,6 +24,16 @@ import aiohttp
 from ast import literal_eval
 import logging
 
+# For settings configurable via Discord commands, these are the defaults if no value is set.
+Defaults = {
+    'seed_autoredeem': False,
+    'seed_threshold': 360,
+    'seed_pointworth': 0.0833333,
+    'seed_adminsaccrue': False,
+    'seed_minplayers': 2,
+    'seed_maxplayers': 50,
+    'seed_pointcap': 0,
+}
 regex_SingleID = "^[0-9]{17}$"
 nl = "\n"
 cookieJar = aiohttp.CookieJar()
@@ -1367,36 +1375,66 @@ if (cfg.get('featureEnable_Seeding', False)):
 
     @group_Seeding.command()
     async def adminsaccrue(interaction: discord.Interaction, accrue:bool):
-        """Should admins accrue points? Default False"""
+        """Should admins accrue points? Only works if you use this bot's /group feature. Default False"""
         await interaction.response.send_message(f"adminsaccrue is now {accrue}.", ephemeral=True)
         setSetting('seed_adminsaccrue', str(accrue))
 
     @group_Seeding.command()
     async def minplayers(interaction: discord.Interaction, players:int):
         """What is the minimum number of players needed in the server for players to accrue points?"""
-        await interaction.response.send_message(f"minplayers is now {players}.", ephemeral=True)
-        setSetting('seed_minplayers', str(players))
+        await interaction.response.send_message(f"minplayers is now {abs(players)}.", ephemeral=True)
+        setSetting('seed_minplayers', str(abs(players)))
 
     @group_Seeding.command()
     async def maxplayers(interaction: discord.Interaction, players:int):
         """What is the maximum number of players in the server for players to accrue points?"""
-        await interaction.response.send_message(f"maxplayers is now {players}.", ephemeral=True)
-        setSetting('seed_maxplayers', str(players))
+        await interaction.response.send_message(f"maxplayers is now {abs(players)}.", ephemeral=True)
+        setSetting('seed_maxplayers', str(abs(players)))
 
+    @group_Seeding.command()
+    async def pointcap(interaction: discord.Interaction, pointcap:int):
+        """Should we cap seeding points to a value? Set to 0 for no cap"""
+        await interaction.response.send_message(f"pointcap is now {abs(pointcap)}.", ephemeral=True)
+        setSetting('seed_pointcap', str(abs(pointcap)))
+
+    @group_Seeding.command()
+    async def debug(interaction: discord.Interaction, ):
+        await interaction.response.send_message(f"boop", ephemeral=True)
+        await checkSeeders()
 ################ END COMMANDS ################
 
-def getSetting(key:str, default = None):
+def getSettingS(key:str, default = None):
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             try:
                 return sqlitecursor.execute("SELECT value FROM keyvals WHERE key=?", (key,)).fetchall()[0][0]
             except:
                 return default
-
-def setSetting(key:str, val:str):
+def getSettingB(key:str, default = None):
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
-            sqlitecursor.execute("INSERT INTO keyvals(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=?", (key,val,val))
+            try:
+                return 'True' in sqlitecursor.execute("SELECT value FROM keyvals WHERE key=?", (key,)).fetchall()[0][0]
+            except:
+                return default
+def getSettingI(key:str, default = None):
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            try:
+                return int(sqlitecursor.execute("SELECT value FROM keyvals WHERE key=?", (key,)).fetchall()[0][0])
+            except:
+                return default
+def getSettingF(key:str, default = None):
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            try:
+                return float(sqlitecursor.execute("SELECT value FROM keyvals WHERE key=?", (key,)).fetchall()[0][0])
+            except:
+                return default
+def setSetting(key:str, val):
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            sqlitecursor.execute("INSERT INTO keyvals(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=?", (key,str(val),str(val)))
         sqlite.commit()
 
 def getPayPalStatus(discordID:int):
@@ -1533,13 +1571,20 @@ async def getSteamIDsForClanWhitelist():
     
     return steamIDs
 
-def getSteamIDsFromRconResp(rconResp:str) -> list[str]:
+def getSteamIDsFromRconResp(rconResp:str):
     steamIDlist = []
     for line in rconResp.splitlines():
         if (line == '----- Recently Disconnected Players [Max of 15] -----'): 
             break
-        steamid = re.search(r'SteamID: ([0-9]{17})', line)
-        try: steamIDlist.append(steamid[1])
+        try:
+            steamid = re.search(r'SteamID: ([0-9]{17})', line)[1]
+            # Check if Admins can accrue, if they cannot, check if player is admin, if they are then skip them.
+            if (cfg.get('featureEnable_SquadGroups', False) and getSettingB('seed_adminsaccrue', Defaults['seed_adminsaccrue']) == False):
+                with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+                    with closing(sqlite.cursor()) as sqlitecursor:
+                        if (sqlitecursor.execute("SELECT discordID FROM squadGroups_SteamIDs WHERE steamID=?", (steamid,)).fetchone()):
+                            continue
+            steamIDlist.append(steamid)
         except: pass
     return steamIDlist
 
@@ -1674,27 +1719,33 @@ if (cfg.get('featureEnable_Paypal', False)):
             f.write(whitelistsStr)
 
 if (cfg.get('featureEnable_Seeding', False)):
-    @aiocron.crontab("* * * * * 15")
+    #@aiocron.crontab("* * * * * 15")
     async def checkSeeders():
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
+                # Check each server to see if they're seeding
                 for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
                     try:
                         ip, port = ipandport.split(':')
                         currentmapResp = await rcon('showcurrentmap', host=ip, port=int(port), passwd=password)
+                        # Check if we're currently on a seed map
                         if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
-                            logging.info("We're currently on a seed map")
                             seedSteamIDs = getSteamIDsFromRconResp(await rcon('listplayers', host=ip, port=int(port), passwd=password))
-                            if ( not( eval(getSetting('seed_minplayers', '2')) < len(seedSteamIDs) < eval(getSetting('seed_maxplayers', '50')) )):
-                                logging.info(f"Player count outside of range")
+                            # If the playercount is outside the threshold of min and max players, don't assign any points
+                            if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
+                                logging.info(f"We're on a seed layer but player count outside of range")
                                 continue
                             logging.info(f"Current seeders: {seedSteamIDs}")
+                            # Give all players 1 seeding point
                             for steamID in seedSteamIDs:
-                                if (not sqlitecursor.execute("SELECT steamID,discordID,isBanking,points FROM seeding_Users WHERE steamID=?", (steamID,)).fetchone()):
-                                    isBanking = 0 if eval(getSetting('seed_autoredeem', 'False')) else 1
+                                pointRow = sqlitecursor.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,)).fetchone()
+                                if (not pointRow):
+                                    isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
                                     sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?)", (steamID,None,isBanking,1))
                                 else:
-                                    sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
+                                    pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
+                                    if (pointCap == 0 or pointRow[0] < pointCap):
+                                        sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
 
                     except: continue
             sqlite.commit()
