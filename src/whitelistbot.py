@@ -14,6 +14,8 @@ import traceback
 import aiocron
 import patreon
 import random
+import socket
+from rcon.source import rcon as rcon
 from discord import app_commands
 from discord import ui
 from contextlib import closing
@@ -23,6 +25,7 @@ from ast import literal_eval
 import logging
 
 regex_SingleID = "^[0-9]{17}$"
+nl = "\n"
 cookieJar = aiohttp.CookieJar()
 PayPalAuthToken = ''
 loop = asyncio.new_event_loop()
@@ -38,6 +41,7 @@ group_SquadGroups = MyGroup(name="groups", description="Manage Squad in-game gro
 group_PayPal = MyGroup(name="paypal", description="Commands for managing the PayPal integration.", default_permissions=discord.Permissions())
 group_MultiWL = MyGroup(name="multiwl", description="Commands for managing the Multi-WL feature.", default_permissions=discord.Permissions())
 group_Clans = MyGroup(name="clans", description="Commands for managing the Clans whitelist feature.", default_permissions=discord.Permissions())
+group_Seeding= MyGroup(name="seeding", description="Commands for managing the Seeding whitelist reward feature.", default_permissions=discord.Permissions())
 
 #####################################
 ######### CLASS SquadClient #########
@@ -59,6 +63,7 @@ class SquadClient(discord.Client):
             if (cfg.get('featureEnable_Paypal', False)): self.tree.add_command(group_PayPal)
             self.tree.add_command(group_MultiWL)
             if (cfg.get('featureClanWhitelists', False)): self.tree.add_command(group_Clans)
+            if (cfg.get('featureEnable_Seeding', False)): self.tree.add_command(group_Seeding)
             self.tree.copy_global_to(guild=MY_GUILD)
             await self.tree.sync(guild=MY_GUILD)
         except Exception as e:
@@ -631,6 +636,7 @@ cfg['featureEnable_SquadGroups']=os.getenv('featureEnable_SquadGroups', 'False')
 cfg['featureEnable_WhitelistAutoUpdate']=os.getenv('featureEnable_WhitelistAutoUpdate', 'False').lower() in ('true', '1', 'y')
 cfg['featurePatreonAudit']=os.getenv('featurePatreonAudit', 'False').lower() in ('true', '1', 'y')
 cfg['featureEnable_PatreonAutoAudit']=os.getenv('featureEnable_PatreonAutoAudit', 'False').lower() in ('true', '1', 'y')
+cfg['featureEnable_Seeding']=os.getenv('featureEnable_Seeding', 'False').lower() in ('true', '1', 'y')
 
 cfg['paypal_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('paypal_outputFile', 'paypalWLs.cfg'))
 cfg['monthlyWhitelists_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('monthlyWhitelists_outputFile', 'monthlyWLs.cfg'))
@@ -1281,6 +1287,51 @@ async def unlinkrole(interaction: discord.Interaction, role: discord.Role):
         with closing(sqlite.cursor()) as sqlitecursor:
             sqlitecursor.execute("DELETE FROM multiwl_RolesWhitelists WHERE roleID=?", (str(role.id), ))
         sqlite.commit()
+
+if (cfg.get('featureEnable_Seeding', False)):
+    @group_Seeding.command()
+    async def addserver(interaction: discord.Interaction, ipaddress: str, rconport: int, rconpassword: str):
+        """Add a server to retrieve seeders from."""
+        try:
+            socket.inet_aton(ipaddress)
+        except:
+            await interaction.response.send_message(f"Error. {ipaddress} is not a valid IP address.", ephemeral=True)
+            return
+        if (len(rconpassword) == 0):
+            await interaction.response.send_message(f"Error. RCON password cannot be blank", ephemeral=True)
+            return
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                sqlitecursor.execute("INSERT INTO seeding_Servers(ipandport,password) VALUES(?,?) ON CONFLICT(ipandport) DO UPDATE SET password=?", (f"{ipaddress}:{rconport}", rconpassword, rconpassword))
+            sqlite.commit()
+        await interaction.response.send_message(f"Server {ipaddress}:{rconport} added.", ephemeral=True)
+
+    @group_Seeding.command()
+    async def removeserver(interaction: discord.Interaction, ipaddress: str, rconport: int):
+        """Remove a server from the seeding check."""
+        try:
+            socket.inet_aton(ipaddress)
+        except:
+            await interaction.response.send_message(f"Error. {ipaddress} is not a valid IP address.", ephemeral=True)
+            return
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                if (len(sqlitecursor.execute("SELECT ipandport FROM seeding_Servers WHERE ipandport = ?", (f"{ipaddress}:{rconport}", )).fetchall()) == 0):
+                    await interaction.response.send_message(f"Error. {ipaddress}:{rconport} isn't in the list of servers.", ephemeral=True)
+                    return
+                sqlitecursor.execute("DELETE FROM seeding_Servers WHERE ipandport=?", (f"{ipaddress}:{rconport}",))
+            sqlite.commit()
+        await interaction.response.send_message(f"Server {ipaddress}:{rconport} removed.", ephemeral=True)
+
+    @group_Seeding.command()
+    async def listservers(interaction: discord.Interaction):
+        """Lists all active seeding servers."""
+        servers = '__Active Servers:__\n'
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                for ipandport in sqlitecursor.execute("SELECT ipandport FROM seeding_Servers").fetchall():
+                    servers += f"`{ipandport[0]}`{nl}"
+        await interaction.response.send_message(f"{servers.strip(nl)}", ephemeral=True)
 ################ END COMMANDS ################
 
 def getPayPalStatus(discordID:int):
@@ -1417,6 +1468,14 @@ async def getSteamIDsForClanWhitelist():
     
     return steamIDs
 
+def getSteamIDsFromRconResp(rconResp:str) -> list[str]:
+    steamIDlist = []
+    for line in rconResp.splitlines():
+        steamid = re.search(r'SteamID: ([0-9]{17})', line)
+        try: steamIDlist.append(steamid[1])
+        except: pass
+    return steamIDlist
+
 if (cfg['featureEnable_WhitelistAutoUpdate']):
     @aiocron.crontab(cfg['whitelistUpdateFreqCron'])
     async def autoPatreon():
@@ -1547,6 +1606,19 @@ if (cfg.get('featureEnable_Paypal', False)):
         with open(cfg['paypal_outputFile'], "w") as f:
             f.write(whitelistsStr)
 
+if (cfg.get('featureEnable_Seeding', False)):
+    @aiocron.crontab("* * * * *")
+    async def checkSeeders():
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
+                    ip, port = ipandport.split(':')
+                    currentmapResp = await rcon('showcurrentmap', host=ip, port=int(port), passwd=password)
+                    if 'Jensens' in currentmapResp or 'Seed' in currentmapResp:
+                        logging.info("We're currently on a seed map")
+                        seedSteamIDs = getSteamIDsFromRconResp(await rcon('listplayers', host=ip, port=int(port), passwd=password))
+                        logging.info(f"Current seeders: {seedSteamIDs}")
+
 async def main():
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
@@ -1566,6 +1638,9 @@ async def main():
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS paypal_PendingTransactions ( discordID TEXT NOT NULL PRIMARY KEY, email TEXT NOT NULL, timestamp INTEGER NOT NULL )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS paypal_UsedTransactions ( discordID TEXT NOT NULL, transactionID TEXT NOT NULL PRIMARY KEY, timestamp INTEGER NOT NULL )")
 
+            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Servers (ipandport TEXT NOT NULL PRIMARY KEY, password TEXT NOT NULL )")
+            
+            
             # If there's an ENV var for the whitelist role, and there aren't any records in the DB, migrate the ENV var to the DB.
             if (len(cfg['whitelistDiscordRoleWhitelists']) > 0):
                 if (len(sqlitecursor.execute("SELECT roleID FROM multiwl_RolesWhitelists").fetchall()) == 0):

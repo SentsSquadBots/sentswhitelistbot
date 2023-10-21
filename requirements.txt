@@ -6,3 +6,4 @@ asyncio
 aiocron
 patreon
 aiohttp
+rcon
