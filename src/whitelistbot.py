@@ -198,7 +198,7 @@ class SquadClient(discord.Client):
             if (numWhitelists != 0):
                 description += "Changes to your whitelist will take effect on next map change on each server.\n"
             if (numWhitelists == 0):
-                description += "**WARNING** " + ("<@"+str(discordID)+"> doesn't " if thirdPerson else "you don't ") + "appear to have linked " + ("their" if thirdPerson else "your")+" Patreon to Discord, or "+("they're" if thirdPerson else "you're")+" not currently subscribed."
+                description += ("<@"+str(discordID)+"> doesn't " if thirdPerson else "You don't ") + "currently have any Discord roles that provide whitelist slots."
             elif (numWhitelists == 1):
                 description += ("<@"+str(discordID)+"> has" if thirdPerson else "You have")+" the single whitelist tier, only the first steamID below will gain whitelist."
             elif (numWhitelists > 1):
@@ -242,9 +242,9 @@ class SquadClient(discord.Client):
         description = ""
         steamIDs = client.getWhitelistIdsFromDiscordID(discordID)
         if (maxWhitelists == 0):
-            description += "**WARNING** " +("they" if thirdPerson else "you")+" don't appear to have linked "+("their" if thirdPerson else "your")+" Patreon to Discord, or "+("they're" if thirdPerson else "you're")+" not currently subscribed."
+            description += ("They" if thirdPerson else "You")+" don't currently have any Discord roles that provide whitelist slots."
             description +=" We still have the following steamIDs on record for when "+("they" if thirdPerson else "you")+" do subscribe."
-            description += "" if thirdPerson else "\nIf you believe this to be an error, please create a Whitelist Ticket in the Admin Center"
+            description += "" if thirdPerson else "\nIf you believe this to be an error, please contact an Admin"
         elif (maxWhitelists == 1):
             description += ("They" if thirdPerson else "You") + " have the single whitelist tier, only the first steamID below will be on your whitelist."
         elif (maxWhitelists > 1):
