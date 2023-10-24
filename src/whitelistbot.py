@@ -27,7 +27,7 @@ import patreon
 import random
 import socket
 import math
-from rcon.source import rcon as rcon
+from rcon.source import Client as rClient
 from discord import app_commands
 from discord import ui
 from contextlib import closing
@@ -1464,18 +1464,43 @@ def setSetting(key:str, val):
             sqlitecursor.execute("INSERT INTO keyvals(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=?", (key,str(val),str(val)))
         sqlite.commit()
 
-async def seedingAssignPoints():
+rconClients = {}
+def rconcmd(cmd:str,hostandport:str,passwd:str):
+    """Creates a persistent RCON client if one doesn't exist, and runs the command using the client"""
+    MAXTRIES = 2
+    ip, port = hostandport.split(':')
+
+    for i in range(0,MAXTRIES):
+        try:
+            if hostandport not in rconClients:
+                rconClients[hostandport] = rClient(ip, int(port))
+                rconClients[hostandport].connect()
+                rconClients[hostandport].login(passwd=passwd)
+        except Exception as e:
+            debug.error(e)
+            continue
+        try:
+            return rconClients[hostandport].run(cmd)
+        except Exception as e:
+            debug.error(e)
+            rconClients[hostandport].close()
+            rconClients.pop(hostandport, None)
+    return None
+    
+
+def seedingAssignPoints():
     """Assign 1 point to every player on each server if that server meets the seeding requirements."""
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             # Check each server to see if they're seeding
             for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
                 try:
-                    ip, port = ipandport.split(':')
-                    currentmapResp = await rcon('showcurrentmap', host=ip, port=int(port), passwd=password)
+                    currentmapResp = rconcmd('showcurrentmap', hostandport=ipandport, passwd=password)
+                    if currentmapResp is None: continue
                     # Check if we're currently on a seed map
                     if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
-                        seedSteamIDs = getSteamIDsFromRconResp(await rcon('listplayers', host=ip, port=int(port), passwd=password))
+                        seedSteamIDs = getSteamIDsFromRconResp(rconcmd('listplayers', hostandport=ipandport, passwd=password))
+                        if seedSteamIDs is None: continue
                         # If the playercount is outside the threshold of min and max players, don't assign any points
                         if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
                             logging.info(f"We're on a seed layer but player count outside of range")
@@ -1662,6 +1687,8 @@ async def getSteamIDsForClanWhitelist():
 
 def getSteamIDsFromRconResp(rconResp:str):
     steamIDlist = []
+    if rconResp is None:
+        return None
     for line in rconResp.splitlines():
         if (line == '----- Recently Disconnected Players [Max of 15] -----'): 
             break
@@ -1810,10 +1837,10 @@ if (cfg.get('featureEnable_Paypal', False)):
 if (cfg.get('featureEnable_Seeding', False)):
     #@aiocron.crontab("* * * * * 15") # Runs every 15th second of every minute
     async def autoSeeding():
-        # await seedingAssignPoints()
-        seedingAutoRedeem()
-        seedingPurgeExpiredWLs()
-        seedingGenerateCFG()
+        seedingAssignPoints()
+        # seedingAutoRedeem()
+        # seedingPurgeExpiredWLs()
+        # seedingGenerateCFG()
 
 
 async def main():
