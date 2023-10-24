@@ -1465,7 +1465,7 @@ def setSetting(key:str, val):
         sqlite.commit()
 
 rconClients = {}
-def rconcmd(cmd:str,hostandport:str,passwd:str):
+def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
     """Creates a persistent RCON client if one doesn't exist, and runs the command using the client"""
     MAXTRIES = 2
     ip, port = hostandport.split(':')
@@ -1480,14 +1480,14 @@ def rconcmd(cmd:str,hostandport:str,passwd:str):
             debug.error(e)
             continue
         try:
-            return rconClients[hostandport].run(cmd)
+            return rconClients[hostandport].run(cmd, *args)
         except Exception as e:
             debug.error(e)
             rconClients[hostandport].close()
             rconClients.pop(hostandport, None)
     return None
     
-
+currentPlayers = []
 def seedingAssignPoints():
     """Assign 1 point to every player on each server if that server meets the seeding requirements."""
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
@@ -1509,13 +1509,18 @@ def seedingAssignPoints():
                         # Give all players 1 seeding point
                         for steamID in seedSteamIDs:
                             pointRow = sqlitecursor.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,)).fetchone()
+                            points = 0
                             if (not pointRow):
                                 isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
                                 sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?)", (steamID,None,isBanking,1))
                             else:
                                 pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
+                                points = pointRow[0]
                                 if (pointCap == 0 or pointRow[0] < pointCap):
                                     sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
+                            if steamID not in currentPlayers:
+                                rconcmd(f'warnplayer', steamID, f'Thank you for joining the seed! You currently have {points} seeding points! See our Discord for more info.', hostandport=ipandport, passwd=password)
+                        currentPlayers = seedSteamIDs.copy()
 
                 except: continue
         sqlite.commit()
