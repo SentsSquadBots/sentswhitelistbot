@@ -27,6 +27,7 @@ import patreon
 import random
 import socket
 import math
+from typing import List
 from rcon.source import Client as rClient
 from discord import app_commands
 from discord import ui
@@ -39,6 +40,7 @@ import logging
 # For settings configurable via Discord commands, these are the defaults if no value is set.
 Defaults = {
     'seed_autoredeem': False,
+    'seed_trackadmins': True,
     'seed_threshold': 360,
     'seed_pointworth': 0.0833333,
     'seed_adminsaccrue': False,
@@ -1425,6 +1427,12 @@ if (cfg.get('featureEnable_Seeding', False)):
         await interaction.response.send_message(f"{user.mention}'s points are now `{finalpoints}`", ephemeral=True)
 
     @group_Seeding.command()
+    async def trackadmins(interaction: discord.Interaction, track:bool):
+        """Keep track of admin time on Jensens, seed, live. Default True"""
+        await interaction.response.send_message(f"trackadmins is now {track}.", ephemeral=True)
+        setSetting('seed_trackadmins', str(track))
+
+    @group_Seeding.command()
     async def debug(interaction: discord.Interaction, ):
         await interaction.response.send_message(f"boop", ephemeral=True)
         await autoSeeding()
@@ -1497,32 +1505,48 @@ def seedingAssignPoints():
             for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
                 try:
                     currentmapResp = rconcmd('showcurrentmap', hostandport=ipandport, passwd=password)
+                    seedSteamIDsAll = None
                     if currentmapResp is None: continue
                     # Check if we're currently on a seed map
                     if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
                         seedSteamIDs = getSteamIDsFromRconResp(rconcmd('listplayers', hostandport=ipandport, passwd=password))
                         if seedSteamIDs is None: continue
+                        seedSteamIDsAll = seedSteamIDs.copy()
+                        # Check if Admins can accrue, if they cannot, check if player is admin, if they are then skip them.
+                        if (cfg.get('featureEnable_SquadGroups', False) and getSettingB('seed_adminsaccrue', Defaults['seed_adminsaccrue']) == False):
+                            seedSteamIDs = removeAdmins(seedSteamIDs)
                         # If the playercount is outside the threshold of min and max players, don't assign any points
                         if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
                             logging.info(f"We're on a seed layer but player count outside of range")
                             continue
                         logging.info(f"Current seeders: {seedSteamIDs}")
-                        # Give all players 1 seeding point
+                        ## Give all players 1 seeding point
                         for steamID in seedSteamIDs:
                             pointRow = sqlitecursor.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,)).fetchone()
-                            points = 0
                             if (not pointRow):
                                 isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
                                 sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?)", (steamID,None,isBanking,1))
                             else:
                                 pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
-                                points = pointRow[0]
                                 if (pointCap == 0 or pointRow[0] < pointCap):
                                     sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
                             # if steamID not in currentPlayers:
                             #     rconcmd(f'warnplayer', steamID, f'Thank you for joining the seed! You currently have {points} seeding points! See our Discord for more info.', hostandport=ipandport, passwd=password)
-                        currentPlayers = seedSteamIDs.copy()
+                        currentPlayers = seedSteamIDsAll.copy()
+                    
+                    ## Track Admin time ##
+                    if (cfg.get('featureEnable_SquadGroups', False) and getSettingI('seed_trackadmins', Defaults['seed_trackadmins'])):
+                        if (seedSteamIDsAll is None):
+                            seedSteamIDsAll = getSteamIDsFromRconResp(rconcmd('listplayers', hostandport=ipandport, passwd=password))
+                        steamIDsAdmins = filterAdmins(seedSteamIDsAll)
 
+                        for steamID in steamIDsAdmins:
+                            if 'Jensen' in currentmapResp:
+                                sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnJensens) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnJensens = minutesOnJensens + 1", (steamID,1))
+                            elif 'Seed' in currentmapResp:
+                                sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnSeed) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnSeed = minutesOnSeed + 1", (steamID,1))
+                            else:
+                                sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnLive) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnLive = minutesOnLive + 1", (steamID,1))
                 except Exception as e: 
                     logging.error(e)
                     continue
@@ -1701,16 +1725,28 @@ def getSteamIDsFromRconResp(rconResp:str):
         if (line == '----- Recently Disconnected Players [Max of 15] -----'): 
             break
         try:
-            steamid = re.search(r'SteamID: ([0-9]{17})', line)[1]
-            # Check if Admins can accrue, if they cannot, check if player is admin, if they are then skip them.
-            if (cfg.get('featureEnable_SquadGroups', False) and getSettingB('seed_adminsaccrue', Defaults['seed_adminsaccrue']) == False):
-                with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-                    with closing(sqlite.cursor()) as sqlitecursor:
-                        if (sqlitecursor.execute("SELECT discordID FROM squadGroups_SteamIDs WHERE steamID=?", (steamid,)).fetchone()):
-                            continue
-            steamIDlist.append(steamid)
+            steamIDlist.append(re.search(r'SteamID: ([0-9]{17})', line)[1])
         except: pass
     return steamIDlist
+
+def removeAdmins(listOfSteamIDs:List[str]) -> List[str]:
+    filteredList = listOfSteamIDs.copy()
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            for sid in listOfSteamIDs:
+                if (sqlitecursor.execute("SELECT discordID FROM squadGroups_SteamIDs WHERE steamID=?", (sid,)).fetchone()):
+                    continue
+                filteredList.append(sid)
+    return filteredList
+
+def filterAdmins(listOfSteamIDs:List[str]) -> List[str]:
+    filteredList = listOfSteamIDs.copy()
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            for sid in listOfSteamIDs:
+                if (sqlitecursor.execute("SELECT discordID FROM squadGroups_SteamIDs WHERE steamID=?", (sid,)).fetchone()):
+                    filteredList.append(sid)
+    return filteredList
 
 if (cfg['featureEnable_WhitelistAutoUpdate']):
     @aiocron.crontab(cfg['whitelistUpdateFreqCron'])
@@ -1843,7 +1879,7 @@ if (cfg.get('featureEnable_Paypal', False)):
             f.write(whitelistsStr)
 
 if (cfg.get('featureEnable_Seeding', False)):
-    #@aiocron.crontab("* * * * * 15") # Runs every 15th second of every minute
+    @aiocron.crontab("* * * * * 15") # Runs every 15th second of every minute
     async def autoSeeding():
         seedingAssignPoints()
         # seedingAutoRedeem()
@@ -1874,6 +1910,8 @@ async def main():
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Users (steamID TEXT NOT NULL PRIMARY KEY, discordID TEXT, isBanking INTEGER NOT NULL, points INTEGER NOT NULL DEFAULT 0 )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Whitelists (steamID TEXT NOT NULL PRIMARY KEY, expires INTEGER NOT NULL )")
             
+            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS adminTracking (steamID TEXT NOT NULL PRIMARY KEY, discordID TEXT, minutesOnJensens INTEGER NOT NULL DEFAULT 0, minutesOnSeed INTEGER NOT NULL DEFAULT 0, minutesOnLive INTEGER NOT NULL DEFAULT 0 )")
+
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS keyvals (key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL )")
             
             # If there's an ENV var for the whitelist role, and there aren't any records in the DB, migrate the ENV var to the DB.
