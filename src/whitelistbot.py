@@ -1485,12 +1485,12 @@ def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
                 rconClients[hostandport].connect()
                 rconClients[hostandport].login(passwd=passwd)
         except Exception as e:
-            debug.error(e)
+            logging.error(e)
             continue
         try:
             return rconClients[hostandport].run(cmd, *args)
         except Exception as e:
-            debug.error(e)
+            logging.error(e)
             rconClients[hostandport].close()
             rconClients.pop(hostandport, None)
     return None
