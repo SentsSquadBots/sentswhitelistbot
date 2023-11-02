@@ -27,6 +27,7 @@ import patreon
 import random
 import socket
 import math
+import csv
 from typing import List
 from rcon.source import Client as rClient
 from discord import app_commands
@@ -1340,7 +1341,7 @@ if (cfg.get('featureEnable_Seeding', False)):
             with closing(sqlite.cursor()) as sqlitecursor:
                 sqlitecursor.execute("INSERT INTO seeding_Servers(ipandport,password) VALUES(?,?) ON CONFLICT(ipandport) DO UPDATE SET password=?", (f"{ipaddress}:{rconport}", rconpassword, rconpassword))
             sqlite.commit()
-        await interaction.response.send_message(f"Server {ipaddress}:{rconport} added.", ephemeral=True)
+        await interaction.response.send_message(f"Server {ipaddress}:{rconport} added.")
 
     @group_Seeding.command()
     async def removeserver(interaction: discord.Interaction, ipaddress: str, rconport: int):
@@ -1357,7 +1358,7 @@ if (cfg.get('featureEnable_Seeding', False)):
                     return
                 sqlitecursor.execute("DELETE FROM seeding_Servers WHERE ipandport=?", (f"{ipaddress}:{rconport}",))
             sqlite.commit()
-        await interaction.response.send_message(f"Server {ipaddress}:{rconport} removed.", ephemeral=True)
+        await interaction.response.send_message(f"Server {ipaddress}:{rconport} removed.")
 
     @group_Seeding.command()
     async def listservers(interaction: discord.Interaction):
@@ -1367,48 +1368,48 @@ if (cfg.get('featureEnable_Seeding', False)):
             with closing(sqlite.cursor()) as sqlitecursor:
                 for ipandport in sqlitecursor.execute("SELECT ipandport FROM seeding_Servers").fetchall():
                     servers += f"`{ipandport[0]}`{nl}"
-        await interaction.response.send_message(f"{servers.strip(nl)}", ephemeral=True)
+        await interaction.response.send_message(f"{servers.strip(nl)}")
 
     @group_Seeding.command()
     async def autoredeem(interaction: discord.Interaction, autoredeem:bool):
         """Should whitelists auto-redeem when they hit the threshold?"""
-        await interaction.response.send_message(f"autoredeem is now {autoredeem}.", ephemeral=True)
+        await interaction.response.send_message(f"autoredeem is now {autoredeem}.")
         setSetting('seed_autoredeem', str(autoredeem))
 
     @group_Seeding.command()
     async def threshold(interaction: discord.Interaction, points:int):
         """How many points until a user can redeem?"""
-        await interaction.response.send_message(f"threshold is now {points} points.", ephemeral=True)
+        await interaction.response.send_message(f"threshold is now {points} points.")
         setSetting('seed_threshold', str(points))
 
     @group_Seeding.command()
     async def pointworth(interaction: discord.Interaction, worth:float):
         """How many days is a single point(minute) worth? Default 0.083"""
-        await interaction.response.send_message(f"A point is now worth {worth} days.", ephemeral=True)
+        await interaction.response.send_message(f"A point is now worth {worth} days.")
         setSetting('seed_pointworth', str(worth))
 
     @group_Seeding.command()
     async def adminsaccrue(interaction: discord.Interaction, accrue:bool):
         """Should admins accrue points? Only works if you use this bot's /group feature. Default False"""
-        await interaction.response.send_message(f"adminsaccrue is now {accrue}.", ephemeral=True)
+        await interaction.response.send_message(f"adminsaccrue is now {accrue}.")
         setSetting('seed_adminsaccrue', str(accrue))
 
     @group_Seeding.command()
     async def minplayers(interaction: discord.Interaction, players:int):
         """What is the minimum number of players needed in the server for players to accrue points?"""
-        await interaction.response.send_message(f"minplayers is now {abs(players)}.", ephemeral=True)
+        await interaction.response.send_message(f"minplayers is now {abs(players)}.")
         setSetting('seed_minplayers', str(abs(players)))
 
     @group_Seeding.command()
     async def maxplayers(interaction: discord.Interaction, players:int):
         """What is the maximum number of players in the server for players to accrue points?"""
-        await interaction.response.send_message(f"maxplayers is now {abs(players)}.", ephemeral=True)
+        await interaction.response.send_message(f"maxplayers is now {abs(players)}.")
         setSetting('seed_maxplayers', str(abs(players)))
 
     @group_Seeding.command()
     async def pointcap(interaction: discord.Interaction, pointcap:int):
         """Should we cap seeding points to a value? Set to 0 for no cap"""
-        await interaction.response.send_message(f"pointcap is now {abs(pointcap)}.", ephemeral=True)
+        await interaction.response.send_message(f"pointcap is now {abs(pointcap)}.")
         setSetting('seed_pointcap', str(abs(pointcap)))
 
     @group_Seeding.command()
@@ -1424,18 +1425,54 @@ if (cfg.get('featureEnable_Seeding', False)):
                 if finalpoints < 0: finalpoints = 0
                 sqlitecursor.execute("UPDATE seeding_Users SET points = ? WHERE discordID = ?", (finalpoints, user.id))
             sqlite.commit()
-        await interaction.response.send_message(f"{user.mention}'s points are now `{finalpoints}`", ephemeral=True)
+        await interaction.response.send_message(f"{user.mention}'s points are now `{finalpoints}`")
 
     @group_Seeding.command()
     async def trackadmins(interaction: discord.Interaction, track:bool):
         """Keep track of admin time on Jensens, seed, live. Default True"""
-        await interaction.response.send_message(f"trackadmins is now {track}.", ephemeral=True)
+        await interaction.response.send_message(f"trackadmins is now {track}.")
         setSetting('seed_trackadmins', str(track))
 
     @group_Seeding.command()
-    async def debug(interaction: discord.Interaction, ):
+    async def adminreport(interaction: discord.Interaction):
+        """Generates a .csv file of all admins and their tracked hours."""
+        with open('admin_tracker.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["steamID", "discordID", "minutesOnJensens", "minutesOnSeed", "minutesOnLive"])
+            with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+                with closing(sqlite.cursor()) as sqlitecursor:
+                    rows = sqlitecursor.execute("SELECT \
+                                         adminTracking.steamID, \
+                                         adminTracking.minutesOnJensens, \
+                                         adminTracking.minutesOnSeed, \
+                                         adminTracking.minutesOnLive, \
+                                         squadGroups_SteamIDs.discordID \
+                                         FROM adminTracking LEFT JOIN squadGroups_SteamIDs \
+                                         ON adminTracking.steamID = squadGroups_SteamIDs.steamID \
+                                         ORDER BY adminTracking.minutesOnSeed DESC").fetchall()
+                    for row in rows:
+                        writer.writerow(row)
+        await interaction.response.send_message(f"Here you go!", file=discord.File('admin_tracker.csv', filename='admin_tracker.csv'))
+        
+
+    @app_commands.describe(confirm='Are you sure?', confirm2='Are you really sure?')
+    @group_Seeding.command()
+    async def resetadmintracking(interaction: discord.Interaction, confirm:bool = False, confirm2:bool = False):
+        """Resets the Admin Tracking, wiping the database."""
+        if (not confirm or not confirm2):
+            await interaction.response.send_message(f"Error, you didn't set both confirmations to True, nothing happened.", ephemeral=True)
+            return
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                sqlitecursor.execute("DELETE FROM adminTracking")
+            sqlite.commit()
+        await interaction.response.send_message(f"Admin Tracking reset.")
+
+
+    @group_Seeding.command()
+    async def debug(interaction: discord.Interaction):
         await interaction.response.send_message(f"boop", ephemeral=True)
-        await autoSeeding()
+        #await autoSeeding()
 ################ END COMMANDS ################
 
 def getSettingS(key:str, default = None):
@@ -1485,12 +1522,12 @@ def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
                 rconClients[hostandport].connect()
                 rconClients[hostandport].login(passwd=passwd)
         except Exception as e:
-            logging.error(e)
+            #logging.error(e)
             continue
         try:
             return rconClients[hostandport].run(cmd, *args)
         except Exception as e:
-            logging.error(e)
+            #logging.error(e)
             rconClients[hostandport].close()
             rconClients.pop(hostandport, None)
     return None
@@ -1539,7 +1576,8 @@ def seedingAssignPoints():
                         if (seedSteamIDsAll is None):
                             seedSteamIDsAll = getSteamIDsFromRconResp(rconcmd('listplayers', hostandport=ipandport, passwd=password))
                         steamIDsAdmins = filterAdmins(seedSteamIDsAll)
-
+                        if len(steamIDsAdmins) > 0:
+                            logging.info(f"Recording activity of {len(steamIDsAdmins)} online admins.")
                         for steamID in steamIDsAdmins:
                             if 'Jensen' in currentmapResp:
                                 sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnJensens) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnJensens = minutesOnJensens + 1", (steamID,1))
@@ -1548,7 +1586,7 @@ def seedingAssignPoints():
                             else:
                                 sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnLive) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnLive = minutesOnLive + 1", (steamID,1))
                 except Exception as e: 
-                    logging.error(e)
+                    #logging.error(e)
                     continue
         sqlite.commit()
 
@@ -1910,7 +1948,7 @@ async def main():
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Users (steamID TEXT NOT NULL PRIMARY KEY, discordID TEXT, isBanking INTEGER NOT NULL, points INTEGER NOT NULL DEFAULT 0 )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Whitelists (steamID TEXT NOT NULL PRIMARY KEY, expires INTEGER NOT NULL )")
             
-            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS adminTracking (steamID TEXT NOT NULL PRIMARY KEY, discordID TEXT, minutesOnJensens INTEGER NOT NULL DEFAULT 0, minutesOnSeed INTEGER NOT NULL DEFAULT 0, minutesOnLive INTEGER NOT NULL DEFAULT 0 )")
+            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS adminTracking (steamID TEXT NOT NULL PRIMARY KEY, minutesOnJensens INTEGER NOT NULL DEFAULT 0, minutesOnSeed INTEGER NOT NULL DEFAULT 0, minutesOnLive INTEGER NOT NULL DEFAULT 0 )")
 
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS keyvals (key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL )")
             
