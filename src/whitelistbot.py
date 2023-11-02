@@ -1443,10 +1443,10 @@ if (cfg.get('featureEnable_Seeding', False)):
                 with closing(sqlite.cursor()) as sqlitecursor:
                     rows = sqlitecursor.execute("SELECT \
                                          adminTracking.steamID, \
+                                         squadGroups_SteamIDs.discordID, \
                                          adminTracking.minutesOnJensens, \
                                          adminTracking.minutesOnSeed, \
-                                         adminTracking.minutesOnLive, \
-                                         squadGroups_SteamIDs.discordID \
+                                         adminTracking.minutesOnLive \
                                          FROM adminTracking LEFT JOIN squadGroups_SteamIDs \
                                          ON adminTracking.steamID = squadGroups_SteamIDs.steamID \
                                          ORDER BY adminTracking.minutesOnSeed DESC").fetchall()
