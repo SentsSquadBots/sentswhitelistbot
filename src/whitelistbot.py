@@ -1490,6 +1490,7 @@ def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
 currentPlayers = []
 def seedingAssignPoints():
     """Assign 1 point to every player on each server if that server meets the seeding requirements."""
+    global currentPlayers
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             # Check each server to see if they're seeding
@@ -1518,11 +1519,13 @@ def seedingAssignPoints():
                                 points = pointRow[0]
                                 if (pointCap == 0 or pointRow[0] < pointCap):
                                     sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
-                            if steamID not in currentPlayers:
-                                rconcmd(f'warnplayer', steamID, f'Thank you for joining the seed! You currently have {points} seeding points! See our Discord for more info.', hostandport=ipandport, passwd=password)
+                            # if steamID not in currentPlayers:
+                            #     rconcmd(f'warnplayer', steamID, f'Thank you for joining the seed! You currently have {points} seeding points! See our Discord for more info.', hostandport=ipandport, passwd=password)
                         currentPlayers = seedSteamIDs.copy()
 
-                except: continue
+                except Exception as e: 
+                    logging.error(e)
+                    continue
         sqlite.commit()
 
 def seedingPurgeExpiredWLs():
