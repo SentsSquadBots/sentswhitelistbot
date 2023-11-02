@@ -1730,7 +1730,7 @@ def getSteamIDsFromRconResp(rconResp:str):
     return steamIDlist
 
 def removeAdmins(listOfSteamIDs:List[str]) -> List[str]:
-    filteredList = listOfSteamIDs.copy()
+    filteredList = []
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             for sid in listOfSteamIDs:
@@ -1740,7 +1740,7 @@ def removeAdmins(listOfSteamIDs:List[str]) -> List[str]:
     return filteredList
 
 def filterAdmins(listOfSteamIDs:List[str]) -> List[str]:
-    filteredList = listOfSteamIDs.copy()
+    filteredList = []
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             for sid in listOfSteamIDs:
