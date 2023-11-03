@@ -1438,7 +1438,7 @@ if (cfg.get('featureEnable_Seeding', False)):
         """Generates a .csv file of all admins and their tracked hours."""
         with open('admin_tracker.csv', 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(["steamID", "discordID", "minutesOnJensens", "minutesOnSeed", "minutesOnLive"])
+            writer.writerow(["steamID", "discordID", "discordName", "minutesOnJensens", "minutesOnSeed", "minutesOnLive"])
             with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
                 with closing(sqlite.cursor()) as sqlitecursor:
                     rows = sqlitecursor.execute("SELECT \
@@ -1451,7 +1451,12 @@ if (cfg.get('featureEnable_Seeding', False)):
                                          ON adminTracking.steamID = squadGroups_SteamIDs.steamID \
                                          ORDER BY adminTracking.minutesOnSeed DESC").fetchall()
                     for row in rows:
-                        writer.writerow(row)
+                        discordName = 'Unknown'
+                        try:
+                            user = client.get_guild(cfg['DiscordServer_ID']).get_member(int(row[1]))
+                            discordName = user.display_name
+                        except: pass
+                        writer.writerow([row[0], row[1], discordName, row[2], row[3], row[4]])
         await interaction.response.send_message(f"Here you go!", file=discord.File('admin_tracker.csv', filename='admin_tracker.csv'))
         
 
