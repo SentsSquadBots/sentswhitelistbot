@@ -1582,6 +1582,9 @@ def seedingAssignPoints():
                             seedSteamIDsAll = getSteamIDsFromRconResp(rconcmd('listplayers', hostandport=ipandport, passwd=password))
                         steamIDsAdmins = filterAdmins(seedSteamIDsAll)
                         if len(steamIDsAdmins) > 0:
+                            if getSettingI('seed_minplayers', Defaults['seed_minplayers']) > 0 and len(seedSteamIDsAll) < getSettingI('seed_minplayers', Defaults['seed_minplayers']):
+                                logging.info(f"Not recording admin acivity, playercount under threshold.")
+                                continue
                             logging.info(f"Recording activity of {len(steamIDsAdmins)} online admins.")
                         for steamID in steamIDsAdmins:
                             if 'Jensen' in currentmapResp:
