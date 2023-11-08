@@ -30,6 +30,7 @@ import math
 import csv
 from typing import List
 from rcon.source import Client as rClient
+from rcon.source import rcon as rClientAsync
 from discord import app_commands
 from discord import ui
 from contextlib import closing
@@ -1477,7 +1478,7 @@ if (cfg.get('featureEnable_Seeding', False)):
     @group_Seeding.command()
     async def debug(interaction: discord.Interaction):
         await interaction.response.send_message(f"boop", ephemeral=True)
-        #await autoSeeding()
+        await autoSeeding()
 ################ END COMMANDS ################
 
 def getSettingS(key:str, default = None):
@@ -1515,11 +1516,15 @@ def setSetting(key:str, val):
         sqlite.commit()
 
 rconClients = {}
-def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
+async def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
     """Creates a persistent RCON client if one doesn't exist, and runs the command using the client"""
+    
+       
     MAXTRIES = 2
     ip, port = hostandport.split(':')
 
+    return await rClientAsync(command=cmd, host=ip, port=int(port), passwd=passwd, *args)
+    # Skip the persistent rcon stuff for now.
     for i in range(0,MAXTRIES):
         try:
             if hostandport not in rconClients:
@@ -1538,7 +1543,7 @@ def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
     return None
     
 currentPlayers = []
-def seedingAssignPoints():
+async def seedingAssignPoints():
     """Assign 1 point to every player on each server if that server meets the seeding requirements."""
     global currentPlayers
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
@@ -1546,12 +1551,13 @@ def seedingAssignPoints():
             # Check each server to see if they're seeding
             for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
                 try:
-                    currentmapResp = rconcmd('showcurrentmap', hostandport=ipandport, passwd=password)
+                    currentmapResp = await rconcmd('showcurrentmap', hostandport=ipandport, passwd=password)
                     seedSteamIDsAll = None
+                    logging.info(f"{currentmapResp}")
                     if currentmapResp is None: continue
                     # Check if we're currently on a seed map
                     if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
-                        seedSteamIDs = getSteamIDsFromRconResp(rconcmd('listplayers', hostandport=ipandport, passwd=password))
+                        seedSteamIDs = getSteamIDsFromRconResp( await rconcmd('listplayers', hostandport=ipandport, passwd=password))
                         if seedSteamIDs is None: continue
                         seedSteamIDsAll = seedSteamIDs.copy()
                         # Check if Admins can accrue, if they cannot, check if player is admin, if they are then skip them.
@@ -1579,7 +1585,7 @@ def seedingAssignPoints():
                     ## Track Admin time ##
                     if (cfg.get('featureEnable_SquadGroups', False) and getSettingI('seed_trackadmins', Defaults['seed_trackadmins'])):
                         if (seedSteamIDsAll is None):
-                            seedSteamIDsAll = getSteamIDsFromRconResp(rconcmd('listplayers', hostandport=ipandport, passwd=password))
+                            seedSteamIDsAll = getSteamIDsFromRconResp(await rconcmd('listplayers', hostandport=ipandport, passwd=password))
                         steamIDsAdmins = filterAdmins(seedSteamIDsAll)
                         if len(steamIDsAdmins) > 0:
                             if getSettingI('seed_minplayers', Defaults['seed_minplayers']) > 0 and len(seedSteamIDsAll) < getSettingI('seed_minplayers', Defaults['seed_minplayers']):
@@ -1594,7 +1600,7 @@ def seedingAssignPoints():
                             else:
                                 sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnLive) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnLive = minutesOnLive + 1", (steamID,1))
                 except Exception as e: 
-                    #logging.error(e)
+                    logging.error(e)
                     continue
         sqlite.commit()
 
@@ -1927,7 +1933,7 @@ if (cfg.get('featureEnable_Paypal', False)):
 if (cfg.get('featureEnable_Seeding', False)):
     @aiocron.crontab("* * * * * 15") # Runs every 15th second of every minute
     async def autoSeeding():
-        seedingAssignPoints()
+        await seedingAssignPoints()
         # seedingAutoRedeem()
         # seedingPurgeExpiredWLs()
         # seedingGenerateCFG()
