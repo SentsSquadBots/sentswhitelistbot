@@ -83,8 +83,8 @@ The compose includes a simple NGINX server which serves all files inside `host_c
 If the bot is running on a remote server, such as a VPS, use the machine's public IP instead of `127.0.0.1`. You can change the port from `8080` if there is a conflict by editing the `compose.yml` file.
 
 ## Configuration
-- All configuration is done via environment variables. The `compose.yml` will automatically load all variables from a `bot.env` file that is in the same folder as the compose.
-- Download the example .env file and rename it to `bot.env` -> `wget https://raw.githubusercontent.com/SentsSquadBots/sentswhitelistbot/main/exampleENV.env -O bot.env`
+- All configuration is done via environment variables. The `compose.yml` will automatically load all variables from a `.env` file that is in the same folder as the compose.
+- Download the example .env file and name it `.env` -> `wget https://raw.githubusercontent.com/SentsSquadBots/sentswhitelistbot/main/exampleENV.env -O .env`
 
 See each section below for info on configuring the bots features.
 
