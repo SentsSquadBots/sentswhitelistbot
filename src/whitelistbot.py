@@ -693,6 +693,7 @@ cfg['patreonTierID_DiscordRoleID']=literal_eval(os.getenv('patreonTierID_Discord
 cfg['whitelistsNeedThisDiscordRoleID']=int(os.getenv('whitelistsNeedThisDiscordRoleID', '0'))
 cfg['extraRolesForPatreonSubs']=literal_eval(os.getenv('extraRolesForPatreonSubs', '[]'))
 cfg['patreonAccessToken']=os.getenv('patreonAccessToken', '')
+cfg['fileHost_Port']=int(os.getenv('fileHost_Port', '8084'))
 
 ################ MODALS ################
 ## User Whitelists ##
@@ -1994,12 +1995,12 @@ async def main():
             traceback.print_stack()
 
 async def servefiles():
-    logging.info(f"Starting fileserver on port 8080, serving all files in folder {os.getenv('container_cfg_folder', 'config')}")
+    logging.info(f"Starting fileserver on port {cfg['fileHost_Port']}, serving all files in folder {os.getenv('container_cfg_folder', 'config')}")
     fileserver = web.Application()
     fileserver.router.add_static(f"/{os.getenv('container_cfg_folder', 'config')}/", path=os.getenv('container_cfg_folder', 'config'))
     runner = web.AppRunner(fileserver)
     await runner.setup()
-    site = web.TCPSite(runner)
+    site = web.TCPSite(runner, port=cfg['fileHost_Port'])
     await site.start()
 
 loop.call_later(1, asyncio.create_task, main())
