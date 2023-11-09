@@ -64,7 +64,16 @@ If you want to run on this on Windows, you can install Docker Desktop and WSL:
 
 Follow the steps above inside of WSL.
 
-If you want to run the bot without Docker, you will need to install Python and all the packages from `requirements.txt` yourself, plus you will need to serve the cfg files as well.
+If you want to run the bot without Docker, you will need to install Python and all the packages from `requirements.txt` yourself. You can also rename the `exampleENV.env` file to `.env` and edit it to configure the bot, the bot will automatically load in all settings if it finds a `.env` file in the same directory.
+
+### Using Pterodactyl or Wisp
+1. Use this generic Python egg: [https://github.com/parkervcp/eggs/tree/master/generic/python](https://github.com/parkervcp/eggs/tree/master/generic/python)
+2. The automatic github clone doesn't seem to work, or I couldn't get it to work, so I just uploaded the `whitelistbot.py` file from the `src` folder in this repo to the container
+3. Upload the `requirements.txt` file
+4. Upload the `exampleENV.env` file **and rename it to `.env`**. Edit this file to configure the bot, see config option explainations [here](#configuration).
+5. Create a folder named `cfgs` in the container
+6. Change the startup parameters of the container so the `App py file` setting is set to `whitelistbot.py`
+7. Start the container!
 
 ## Limit Command Usage
 The bot has multiple /slashcommands. The public members of your server should not have access to these commands. By default all commands will only be useable by server administrators. If you would like to allow specific roles to use the commands, go into your server's settings -> Integrations -> and add roles or members to the different command groups.
