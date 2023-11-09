@@ -28,6 +28,7 @@ import random
 import socket
 import math
 import csv
+from pathlib import Path
 from typing import List
 from rcon.source import Client as rClient
 from rcon.source import rcon as rClientAsync
@@ -36,6 +37,7 @@ from discord import ui
 from contextlib import closing
 from datetime import datetime, timedelta
 import aiohttp
+from aiohttp import web
 from ast import literal_eval
 import logging
 
@@ -68,6 +70,7 @@ try:
     from dotenv import load_dotenv
     logging.info(f"Loaded .env: {load_dotenv(override=True)}")
 except: pass
+
 
 class MyGroup(app_commands.Group):
     ...
@@ -1990,5 +1993,16 @@ async def main():
             logging.error(e)
             traceback.print_stack()
 
+async def servefiles():
+    logging.info(f"Starting fileserver on port 8080, serving all files in folder {os.getenv('container_cfg_folder', 'config')}")
+    fileserver = web.Application()
+    fileserver.router.add_static(f"/{os.getenv('container_cfg_folder', 'config')}/", path=os.getenv('container_cfg_folder', 'config'))
+    runner = web.AppRunner(fileserver)
+    await runner.setup()
+    site = web.TCPSite(runner)
+    await site.start()
+
 loop.call_later(1, asyncio.create_task, main())
+if (os.getenv('featureEnable_FileHosting', 'true') in ['true', 't', '1'] and Path(os.getenv('container_cfg_folder', 'config')).is_dir()):
+    loop.call_later(2, asyncio.create_task, servefiles())
 loop.run_forever()
