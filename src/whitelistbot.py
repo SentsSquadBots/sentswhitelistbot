@@ -39,6 +39,9 @@ import aiohttp
 from ast import literal_eval
 import logging
 
+
+
+
 # For settings configurable via Discord commands, these are the defaults if no value is set.
 Defaults = {
     'seed_autoredeem': False,
@@ -60,6 +63,11 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S')
+
+try:
+    from dotenv import load_dotenv
+    logging.info(f"Loaded .env: {load_dotenv(override=True)}")
+except: pass
 
 class MyGroup(app_commands.Group):
     ...
