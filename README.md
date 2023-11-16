@@ -68,12 +68,14 @@ If you want to run the bot without Docker, you will need to install Python and a
 
 ### Using Pterodactyl or Wisp
 1. Use this generic Python egg: [https://github.com/parkervcp/eggs/tree/master/generic/python](https://github.com/parkervcp/eggs/tree/master/generic/python)
-2. The automatic github clone doesn't seem to work, or I couldn't get it to work, so I just uploaded the `whitelistbot.py` file from the `src` folder in this repo to the container
+2. Uploaded the `whitelistbot.py` file from the `src` folder in this repo to the container
 3. Upload the `requirements.txt` file
 4. Upload the `exampleENV.env` file **and rename it to `.env`**. Edit this file to configure the bot, see config option explainations [here](#configuration).
-5. Create a folder named `cfgs` in the container
-6. Change the startup parameters of the container so the `App py file` setting is set to `whitelistbot.py`
-7. Start the container!
+5. **Important** When you're editing the .env file, make sure to change `container_db_folder` to be `db` and change `container_cfg_folder` to be `cfgs` (any variables starting with "host" are not relevant in Ptero/Wisp)
+6. Create a folder named `cfgs` in the container
+7. Create a folder named `db` in the container
+8. Change the startup parameters of the container so the `App py file` setting is set to `whitelistbot.py`
+9. Start the container!
 
 ## Limit Command Usage
 The bot has multiple /slashcommands. The public members of your server should not have access to these commands. By default all commands will only be useable by server administrators. If you would like to allow specific roles to use the commands, go into your server's settings -> Integrations -> and add roles or members to the different command groups.
