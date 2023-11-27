@@ -6,5 +6,4 @@ asyncio
 aiocron
 patreon
 aiohttp
-rcon
 python-dotenv

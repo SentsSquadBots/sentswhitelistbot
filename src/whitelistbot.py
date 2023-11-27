@@ -26,12 +26,9 @@ import aiocron
 import patreon
 import random
 import socket
-import math
 import csv
 from pathlib import Path
 from typing import List
-from rcon.source import Client as rClient
-from rcon.source import rcon as rClientAsync
 from discord import app_commands
 from discord import ui
 from contextlib import closing
@@ -1340,38 +1337,25 @@ async def unlinkrole(interaction: discord.Interaction, role: discord.Role):
 
 if (cfg.get('featureEnable_Seeding', False)):
     @group_Seeding.command()
-    async def addserver(interaction: discord.Interaction, ipaddress: str, rconport: int, rconpassword: str):
+    async def addserver(interaction: discord.Interaction, bmid: int, bmapikey: str):
         """Add a server to retrieve seeders from."""
-        try:
-            socket.inet_aton(ipaddress)
-        except:
-            await interaction.response.send_message(f"Error. {ipaddress} is not a valid IP address.", ephemeral=True)
-            return
-        if (len(rconpassword) == 0):
-            await interaction.response.send_message(f"Error. RCON password cannot be blank", ephemeral=True)
-            return
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
-                sqlitecursor.execute("INSERT INTO seeding_Servers(ipandport,password) VALUES(?,?) ON CONFLICT(ipandport) DO UPDATE SET password=?", (f"{ipaddress}:{rconport}", rconpassword, rconpassword))
+                sqlitecursor.execute("INSERT INTO seeding_Servers(bmID,bmAPIkey) VALUES(?,?) ON CONFLICT(bmID) DO UPDATE SET bmAPIkey=?", (str(bmid), bmapikey, bmapikey))
             sqlite.commit()
-        await interaction.response.send_message(f"Server {ipaddress}:{rconport} added.")
+        await interaction.response.send_message(f"BM Server {bmid} added.")
 
     @group_Seeding.command()
-    async def removeserver(interaction: discord.Interaction, ipaddress: str, rconport: int):
+    async def removeserver(interaction: discord.Interaction, bmid: int):
         """Remove a server from the seeding check."""
-        try:
-            socket.inet_aton(ipaddress)
-        except:
-            await interaction.response.send_message(f"Error. {ipaddress} is not a valid IP address.", ephemeral=True)
-            return
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
-                if (len(sqlitecursor.execute("SELECT ipandport FROM seeding_Servers WHERE ipandport = ?", (f"{ipaddress}:{rconport}", )).fetchall()) == 0):
-                    await interaction.response.send_message(f"Error. {ipaddress}:{rconport} isn't in the list of servers.", ephemeral=True)
+                if (len(sqlitecursor.execute("SELECT bmID FROM seeding_Servers WHERE bmID = ?", (bmid, )).fetchall()) == 0):
+                    await interaction.response.send_message(f"Error. {bmid} isn't in the list of servers.", ephemeral=True)
                     return
-                sqlitecursor.execute("DELETE FROM seeding_Servers WHERE ipandport=?", (f"{ipaddress}:{rconport}",))
+                sqlitecursor.execute("DELETE FROM seeding_Servers WHERE bmid=?", (bmid,))
             sqlite.commit()
-        await interaction.response.send_message(f"Server {ipaddress}:{rconport} removed.")
+        await interaction.response.send_message(f"Server {bmid} removed.")
 
     @group_Seeding.command()
     async def listservers(interaction: discord.Interaction):
@@ -1379,8 +1363,8 @@ if (cfg.get('featureEnable_Seeding', False)):
         servers = '__Active Servers:__\n'
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
-                for ipandport in sqlitecursor.execute("SELECT ipandport FROM seeding_Servers").fetchall():
-                    servers += f"`{ipandport[0]}`{nl}"
+                for bmid in sqlitecursor.execute("SELECT bmid FROM seeding_Servers").fetchall():
+                    servers += f"`{bmid[0]}`{nl}"
         await interaction.response.send_message(f"{servers.strip(nl)}")
 
     @group_Seeding.command()
@@ -1527,49 +1511,49 @@ def setSetting(key:str, val):
             sqlitecursor.execute("INSERT INTO keyvals(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=?", (key,str(val),str(val)))
         sqlite.commit()
 
-rconClients = {}
-async def rconcmd(cmd:str,hostandport:str,passwd:str, *args):
-    """Creates a persistent RCON client if one doesn't exist, and runs the command using the client"""
-    
-       
-    MAXTRIES = 2
-    ip, port = hostandport.split(':')
+async def getCurrentMapBM(bmID):
+    themap = "Bad BM Response"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f'https://api.battlemetrics.com/servers/{bmID}') as response:
+                bmData = (await response.json())['data']
+                return bmData['attributes']['details']['map']
+    except Exception as e:
+        logging.error(f"Error calling BM API: {e}")
+    return themap
 
-    return await rClientAsync(command=cmd, host=ip, port=int(port), passwd=passwd, *args)
-    # Skip the persistent rcon stuff for now.
-    for i in range(0,MAXTRIES):
-        try:
-            if hostandport not in rconClients:
-                rconClients[hostandport] = rClient(ip, int(port))
-                rconClients[hostandport].connect()
-                rconClients[hostandport].login(passwd=passwd)
-        except Exception as e:
-            #logging.error(e)
-            continue
-        try:
-            return rconClients[hostandport].run(cmd, *args)
-        except Exception as e:
-            #logging.error(e)
-            rconClients[hostandport].close()
-            rconClients.pop(hostandport, None)
-    return None
-    
-currentPlayers = []
+async def  getAllPlayersBM(bmID, bmAPIkey):
+    steamIDlist = []
+    try:
+        battleMetricsKey = {'Authorization': 'Bearer ' + bmAPIkey}
+        async with aiohttp.ClientSession(headers=battleMetricsKey) as session:
+            async with session.get(f'https://api.battlemetrics.com/servers/{bmID}?include=identifier') as response:
+                bmIncludes = (await response.json())['included']
+                for included in bmIncludes:
+                    if (included['type'] != 'identifier'):
+                        continue
+                    if (included['attributes']['type'] != 'steamID'):
+                        continue
+                    steamIDlist.append(included['attributes']['identifier'])
+    except Exception as e:
+        logging.error(f"Error calling BM API: {e}")
+    return steamIDlist
+
 async def seedingAssignPoints():
     """Assign 1 point to every player on each server if that server meets the seeding requirements."""
     global currentPlayers
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             # Check each server to see if they're seeding
-            for ipandport,password in sqlitecursor.execute("SELECT ipandport,password FROM seeding_Servers").fetchall():
+            for bmID,bmAPIkey in sqlitecursor.execute("SELECT bmID,bmAPIkey FROM seeding_Servers").fetchall():
                 try:
-                    currentmapResp = await rconcmd('showcurrentmap', hostandport=ipandport, passwd=password)
+                    currentmapResp = await getCurrentMapBM(bmID)
                     seedSteamIDsAll = None
-                    logging.info(f"{currentmapResp}")
+                    logging.info(f"Current map: {currentmapResp}")
                     if currentmapResp is None: continue
                     # Check if we're currently on a seed map
                     if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
-                        seedSteamIDs = getSteamIDsFromRconResp( await rconcmd('listplayers', hostandport=ipandport, passwd=password))
+                        seedSteamIDs = await getAllPlayersBM(bmID,bmAPIkey)
                         if seedSteamIDs is None: continue
                         seedSteamIDsAll = seedSteamIDs.copy()
                         # Check if Admins can accrue, if they cannot, check if player is admin, if they are then skip them.
@@ -1590,14 +1574,11 @@ async def seedingAssignPoints():
                                 pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
                                 if (pointCap == 0 or pointRow[0] < pointCap):
                                     sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
-                            # if steamID not in currentPlayers:
-                            #     rconcmd(f'warnplayer', steamID, f'Thank you for joining the seed! You currently have {points} seeding points! See our Discord for more info.', hostandport=ipandport, passwd=password)
-                        currentPlayers = seedSteamIDsAll.copy()
                     
                     ## Track Admin time ##
                     if (cfg.get('featureEnable_SquadGroups', False) and getSettingI('seed_trackadmins', Defaults['seed_trackadmins'])):
                         if (seedSteamIDsAll is None):
-                            seedSteamIDsAll = getSteamIDsFromRconResp(await rconcmd('listplayers', hostandport=ipandport, passwd=password))
+                            seedSteamIDsAll = await getAllPlayersBM(bmID,bmAPIkey)
                         steamIDsAdmins = filterAdmins(seedSteamIDsAll)
                         if len(steamIDsAdmins) > 0:
                             if getSettingI('seed_minplayers', Defaults['seed_minplayers']) > 0 and len(seedSteamIDsAll) < getSettingI('seed_minplayers', Defaults['seed_minplayers']):
@@ -1970,7 +1951,7 @@ async def main():
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS paypal_PendingTransactions ( discordID TEXT NOT NULL PRIMARY KEY, email TEXT NOT NULL, timestamp INTEGER NOT NULL )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS paypal_UsedTransactions ( discordID TEXT NOT NULL, transactionID TEXT NOT NULL PRIMARY KEY, timestamp INTEGER NOT NULL )")
 
-            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Servers (ipandport TEXT NOT NULL PRIMARY KEY, password TEXT NOT NULL )")
+            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Servers (bmID TEXT NOT NULL PRIMARY KEY, bmAPIkey TEXT NOT NULL )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Users (steamID TEXT NOT NULL PRIMARY KEY, discordID TEXT, isBanking INTEGER NOT NULL, points INTEGER NOT NULL DEFAULT 0 )")
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Whitelists (steamID TEXT NOT NULL PRIMARY KEY, expires INTEGER NOT NULL )")
             
