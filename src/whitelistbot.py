@@ -37,6 +37,7 @@ import aiohttp
 from aiohttp import web
 from ast import literal_eval
 import logging
+from pysteamsignin.steamsignin import SteamSignIn
 
 
 
@@ -1475,6 +1476,14 @@ if (cfg.get('featureEnable_Seeding', False)):
     async def debug(interaction: discord.Interaction):
         await interaction.response.send_message(f"boop", ephemeral=True)
         await autoSeeding()
+    
+    @group_Seeding.command()
+    async def debugauth(interaction: discord.Interaction):
+        steamLogin = SteamSignIn()
+        encodedData = steamLogin.ConstructURL(f'http://127.0.0.1:42879/authorize?discordid={interaction.user.id}')
+        steam_openid_url = 'https://steamcommunity.com/openid/login'
+        auth_url = steam_openid_url + "?" + encodedData
+        await interaction.response.send_message(content=f"[Click here to verify.]({auth_url})", ephemeral=True)
 ################ END COMMANDS ################
 
 def getSettingS(key:str, default = None):
@@ -1984,7 +1993,30 @@ async def servefiles():
     site = web.TCPSite(runner, port=cfg['fileHost_Port'])
     await site.start()
 
+async def steamAuthEndPoint():
+    logging.info(f"Starting Steam OpenID authorization endpoint on port 42879")
+    webapp = web.Application()
+    webapp.add_routes([web.get('/', steamAuthEndpoint_root)])
+    webapp.add_routes([web.get('/authorize', steamAuthEndpoint_authorize)])
+    runner = web.AppRunner(webapp)
+    await runner.setup()
+    site = web.TCPSite(runner, port=42879)
+    await site.start()
+
+async def steamAuthEndpoint_root(request:web.Request):
+    return web.Response(text="Nothing here!")
+
+async def steamAuthEndpoint_authorize(request:web.Request):
+    print(request)
+    return web.Response(text=str(request))
+
 loop.call_later(1, asyncio.create_task, main())
 if (os.getenv('featureEnable_FileHosting', 'true') in ['true', 't', '1'] and Path(os.getenv('container_cfg_folder', 'config')).is_dir()):
     loop.call_later(2, asyncio.create_task, servefiles())
+
+if (cfg.get('featureEnable_Seeding', False)):
+    ...
+    #loop.call_later(3, asyncio.create_task, steamAuthEndPoint())
+
+logging.info("init")
 loop.run_forever()

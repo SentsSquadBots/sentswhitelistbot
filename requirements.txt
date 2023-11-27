@@ -7,3 +7,4 @@ aiocron
 patreon
 aiohttp
 python-dotenv
+steamsignin
