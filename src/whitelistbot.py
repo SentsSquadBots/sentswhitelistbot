@@ -37,7 +37,6 @@ import aiohttp
 from aiohttp import web
 from ast import literal_eval
 import logging
-from pysteamsignin.steamsignin import SteamSignIn
 
 
 
@@ -68,7 +67,9 @@ try:
     from dotenv import load_dotenv
     logging.info(f"Loaded .env: {load_dotenv(override=True)}")
 except: pass
-
+try:
+    from pysteamsignin.steamsignin import SteamSignIn
+except: pass
 
 class MyGroup(app_commands.Group):
     ...
@@ -109,6 +110,7 @@ class SquadClient(discord.Client):
         self.add_view(ButtonWhitelistGatherView())
         self.add_view(ClanWhitelistsView())
         self.add_view(PayPalWhitelistView())
+        self.add_view(SeedingPointsView())
         logging.info("Buttons are now active.")
         logging.info("Bot is ready!")
 
@@ -638,7 +640,34 @@ class PayPalWhitelist_Status(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         embed = discord.Embed(title='PayPal Whitelist Status', description=getPayPalStatus(discordID=interaction.user.id))
-        await interaction.response.send_message(content=f"Todo", embed=embed, ephemeral=True)
+        await interaction.response.send_message(content=f"", embed=embed, ephemeral=True)
+
+## Seeding Points ##
+class SeedingPointsView(discord.ui.View):
+    def __init__(self,):
+        super().__init__(timeout=None)
+        self.add_item(SeedingPoints_Status())
+        self.add_item(SeedingPoints_Link())
+
+class SeedingPoints_Status(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Check Status",style=discord.ButtonStyle.secondary, emoji='❔', custom_id="SeedingPoints_Status")
+
+    async def callback(self, interaction: discord.Interaction):
+        embed = discord.Embed(title='Seeding Points Status', description="TODO")
+        await interaction.response.send_message(content=f"TODO", embed=embed, ephemeral=True)
+
+class SeedingPoints_Link(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Verify SteamID",style=discord.ButtonStyle.secondary, emoji='✔️', custom_id="SeedingPoints_Link")
+
+    async def callback(self, interaction: discord.Interaction):
+        steamLogin = SteamSignIn()
+        encodedData = steamLogin.ConstructURL(f"http://{os.getenv('steamAuthEndpoint_Host', '127.0.0.1')}:{os.getenv('steamAuthEndpoint_Port', '42879')}/authorize?discordid={interaction.user.id}")
+        steam_openid_url = 'https://steamcommunity.com/openid/login'
+        auth_url = steam_openid_url + "?" + encodedData
+        embed = discord.Embed(title='Verify your SteamID', description=f"[Click here to log into your Steam Account to verify.]({auth_url})")
+        await interaction.response.send_message(content="", embed=embed, ephemeral=True)
 
 ######### END INTERACTION CLASSES #########
 
@@ -1457,7 +1486,6 @@ if (cfg.get('featureEnable_Seeding', False)):
                         writer.writerow([row[0], row[1], discordName, row[2], row[3], row[4]])
         await interaction.response.send_message(f"Here you go!", file=discord.File('admin_tracker.csv', filename='admin_tracker.csv'))
         
-
     @app_commands.describe(confirm='Are you sure?', confirm2='Are you really sure?')
     @group_Seeding.command()
     async def resetadmintracking(interaction: discord.Interaction, confirm:bool = False, confirm2:bool = False):
@@ -1471,19 +1499,26 @@ if (cfg.get('featureEnable_Seeding', False)):
             sqlite.commit()
         await interaction.response.send_message(f"Admin Tracking reset.")
 
+    @group_Seeding.command()
+    async def sendpanel(interaction: discord.Interaction, channel: discord.TextChannel):
+        await interaction.response.send_message("Panel created", ephemeral=True)
+        try:
+            embed = discord.Embed(title="Manage your Seeding Points!", 
+            description=f"""
+TODO
+            """)
+            embed.add_field(name="​", inline=False, value="Made with ♥ by <@177189581060308992>")
+            view = SeedingPointsView()
+            await channel.send(embed=embed, view=view)
+        except Exception as e:
+            logging.error(e)
+
 
     @group_Seeding.command()
     async def debug(interaction: discord.Interaction):
         await interaction.response.send_message(f"boop", ephemeral=True)
         await autoSeeding()
     
-    @group_Seeding.command()
-    async def debugauth(interaction: discord.Interaction):
-        steamLogin = SteamSignIn()
-        encodedData = steamLogin.ConstructURL(f'http://127.0.0.1:42879/authorize?discordid={interaction.user.id}')
-        steam_openid_url = 'https://steamcommunity.com/openid/login'
-        auth_url = steam_openid_url + "?" + encodedData
-        await interaction.response.send_message(content=f"[Click here to verify.]({auth_url})", ephemeral=True)
 ################ END COMMANDS ################
 
 def getSettingS(key:str, default = None):
@@ -1531,7 +1566,7 @@ async def getCurrentMapBM(bmID):
         logging.error(f"Error calling BM API: {e}")
     return themap
 
-async def  getAllPlayersBM(bmID, bmAPIkey):
+async def getAllPlayersBM(bmID, bmAPIkey):
     steamIDlist = []
     try:
         battleMetricsKey = {'Authorization': 'Bearer ' + bmAPIkey}
@@ -1594,6 +1629,7 @@ async def seedingAssignPoints():
                                 logging.info(f"Not recording admin acivity, playercount under threshold.")
                                 continue
                             logging.info(f"Recording activity of {len(steamIDsAdmins)} online admins.")
+                            logging.info(f"Admins: {steamIDsAdmins}")
                         for steamID in steamIDsAdmins:
                             if 'Jensen' in currentmapResp:
                                 sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnJensens) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnJensens = minutesOnJensens + 1", (steamID,1))
@@ -1994,29 +2030,34 @@ async def servefiles():
     await site.start()
 
 async def steamAuthEndPoint():
-    logging.info(f"Starting Steam OpenID authorization endpoint on port 42879")
+    logging.info(f"Starting Steam OpenID authorization endpoint - steamAuthEndpoint_Host={os.getenv('steamAuthEndpoint_Host', '127.0.0.1')} steamAuthEndpoint_Port={os.getenv('steamAuthEndpoint_Port', '42879')}")
     webapp = web.Application()
     webapp.add_routes([web.get('/', steamAuthEndpoint_root)])
     webapp.add_routes([web.get('/authorize', steamAuthEndpoint_authorize)])
     runner = web.AppRunner(webapp)
     await runner.setup()
-    site = web.TCPSite(runner, port=42879)
+    site = web.TCPSite(runner, port=int(os.getenv('steamAuthEndpoint_Port', '42879')))
     await site.start()
 
 async def steamAuthEndpoint_root(request:web.Request):
     return web.Response(text="Nothing here!")
 
 async def steamAuthEndpoint_authorize(request:web.Request):
-    print(request)
-    return web.Response(text=str(request))
+    steamLogin = SteamSignIn()
+    returnedSteamID = steamLogin.ValidateResults(request.rel_url.query)
+    if(returnedSteamID == False):
+        return web.Response(text="Could not validate your openID authorization with Steam.")
+    # returnedSteamID contains a validated steamID
+    try:
+        return web.Response(text=f"Thank you, your SteamID {returnedSteamID} has been linked to {request.rel_url.query['discordid']}.")
+    except:
+        return web.Response(text="Your authorization is missing your discordID somehow. Please try again.")
 
 loop.call_later(1, asyncio.create_task, main())
 if (os.getenv('featureEnable_FileHosting', 'true') in ['true', 't', '1'] and Path(os.getenv('container_cfg_folder', 'config')).is_dir()):
     loop.call_later(2, asyncio.create_task, servefiles())
 
 if (cfg.get('featureEnable_Seeding', False)):
-    ...
-    #loop.call_later(3, asyncio.create_task, steamAuthEndPoint())
+    loop.call_later(3, asyncio.create_task, steamAuthEndPoint())
 
-logging.info("init")
 loop.run_forever()
