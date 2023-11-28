@@ -1365,87 +1365,6 @@ if (cfg.get('featurePatreonAudit', False)):
         logging.info(declinedUsers)
         await message.edit(content=declinedUsers)  
 
-@group_MultiWL.command()
-@app_commands.describe(user_to_permit='User to permit.')
-async def permit(interaction: discord.Interaction, user_to_permit: discord.Member):
-    """Allow a user to make another whitelist submission on the same day."""
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            CDDiscordServer = client.get_guild(cfg['DiscordServer_ID'])
-            rows = sqlitecursor.execute("SELECT steamID FROM whitelistSteamIDs WHERE discordID = ?", (user_to_permit.id,)).fetchall()
-            # user has a steamID recorded
-            if (len(rows) >= 1):
-                # set the changedOn to a day ago
-                sqlitecursor.execute("UPDATE whitelistSteamIDs SET changedOnEpoch = ? WHERE discordID = ?", (int(time.time()) - cfg['secondsBetweenWhitelistUpdates'], str(user_to_permit.id)))
-                await interaction.response.send_message(user_to_permit.mention + " is now permitted to make an additional whitelist submission today.")
-            else:
-                # user hasn't made a submission yet
-                await interaction.response.send_message(user_to_permit.mention + " hasn't made a submission yet, no permit needed.")
-        sqlite.commit()
-
-@group_MultiWL.command()
-async def sync(interaction: discord.Interaction):
-    """Forces the whitelists on the server to update. Use sparingly."""
-    await interaction.response.send_message("Syncing Patreon whitelists.")
-    await client.updatePatreonWhitelists()
-
-@group_MultiWL.command()
-async def sendpanel(interaction: discord.Interaction, channel: discord.TextChannel):
-    """Sends the Multi-Whitelist Control Panel to the selected channel"""
-    await interaction.response.send_message("Panel created", ephemeral=True)
-    await client.sendWhitelistModal(channelID=channel.id)
-
-@group_MultiWL.command()
-async def whiteliststatus(interaction: discord.Interaction, user_to_check: discord.Member):
-    """Check the whitelist status for a discord user."""
-    description = "**Whitelist Status for Discord Member " + user_to_check.name + "**\n"+client.getWhitelistStatus(user_to_check.id, thirdPerson=True)
-    await interaction.response.send_message(description)
-
-@group_MultiWL.command()
-async def editwhitelist(interaction: discord.Interaction, user_to_edit: discord.Member):
-    """Make changes to a user's whitelist"""
-    try:
-        maxWhitelists = client.getMaxWhitelistsByDiscordID(user_to_edit.id)
-        currentSteamIDs = client.getWhitelistIdsFromDiscordID(user_to_edit.id)
-        modal = modal_EditWhitelists(maxWhitelists, currentSteamIDs, isAdminEditing=True, adminIsEditingID=user_to_edit.id)
-        await interaction.response.send_modal(modal)
-    except Exception as e: # work on python 3.x
-        logging.error(e)
-        traceback.print_stack()
-
-@group_MultiWL.command()
-async def linkrole(interaction: discord.Interaction, role: discord.Role, maxwhitelists: int):
-    """Give a role a number of Whitelists users can self-manage."""
-    if (maxwhitelists < 1):
-        await interaction.response.send_message(f"Error: `{maxwhitelists}` must be greater than zero.", ephemeral=True)
-        return
-    await interaction.response.send_message(f"Members with {role.mention} can now put up to `{maxwhitelists}` steamIDs on their personal whitelist.", ephemeral=True)
-    await client.logMsg("MultiWhitelist", f"{interaction.user.mention} updated {role.mention} to max of `{maxwhitelists}` WLs.")
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            sqlitecursor.execute("INSERT INTO multiwl_RolesWhitelists(roleID,numWhitelists) VALUES(?,?) ON CONFLICT(roleID) DO UPDATE SET numWhitelists=?", (str(role.id),maxwhitelists,maxwhitelists))
-        sqlite.commit()
-
-@group_MultiWL.command()
-async def listroles(interaction: discord.Interaction):
-    """List all roles with configured multi-whitelist slots."""
-    rolesStr = '__All Roles with multi-whitelist slots:__\n'
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            for roleID,numWhitelists in sqlitecursor.execute("SELECT roleID,numWhitelists FROM multiwl_RolesWhitelists").fetchall():
-                rolesStr += f"<@&{roleID}>: max `{numWhitelists}` SteamIDs\n"
-    await interaction.response.send_message(content=rolesStr.strip('\n'))
-
-@group_MultiWL.command()
-async def unlinkrole(interaction: discord.Interaction, role: discord.Role):
-    """Unlink a role from having any whitelists."""
-    await interaction.response.send_message(f"Members with {role.mention} will no longer receive any whitelist slots.", ephemeral=True)
-    await client.logMsg("MultiWhitelist", f"{interaction.user.mention} unlinked {role.mention}. ")
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            sqlitecursor.execute("DELETE FROM multiwl_RolesWhitelists WHERE roleID=?", (str(role.id), ))
-        sqlite.commit()
-
 if (cfg.get('featureEnable_Seeding', False)):
     @group_Seeding.command()
     async def config(interaction: discord.Interaction):
@@ -1611,18 +1530,18 @@ __Seeding Settings__\n
 Use the buttons below to manage and redeem your stored seeding points. 
 You gain 1 seeding point per minute you spend on our server while seeding. You can redeem these points for free whitelist! 
 You can also enable AutoRedeem and as you hit the point threshold, we will automatically redeem your points for whitelist.
-__To get started__:
+### To get started
 - Verify your Steam account by logging into Steam through the `Verify SteamID` button below. 
 - Once verified, check your current seeding points with the `Check Status` button. It will show you how much whitelist they are worth.
 - Redeem some or all of your points for whitelist with the `Redeem Now` button! (Or enable AutoRedeem if you're lazy)
-__The current global settings are__:
+### The current global settings
 - Minumum points required to redeem: `{seed_threshold}`
 - If you're using AutoRedeem, you'll auto redeem at `{seed_threshold}` points.
 - You receive `1` seed point every minute you are on the server while the player count is between `{seed_minplayers}` and `{seed_maxplayers}`.
 - Points are {'not capped' if seed_pointcap == 0 else 'capped at ' + seed_pointcap}
 - A single seed point is worth `{seed_pointworth}` days of whitelist. 
   - That means to get 30 days of whitelist, you'd need to seed for a total of `{round(30/seed_pointworth/60,1)}` hours. That's `{round(30/seed_pointworth,1)}` points.
-__FAQ__:
+### FAQ
 *Why do I need to sign in through Steam?* 
 Because this way we confirm you own the Steam account you're trying to redeem points for. The only information we store from Steam is your SteamID. You can choose not to use this service.
             """)
@@ -1636,7 +1555,88 @@ Because this way we confirm you own the Steam account you're trying to redeem po
     async def debug(interaction: discord.Interaction):
         await interaction.response.send_message(f"boop", ephemeral=True)
         #await autoSeeding()
-    
+
+@group_MultiWL.command()
+@app_commands.describe(user_to_permit='User to permit.')
+async def permit(interaction: discord.Interaction, user_to_permit: discord.Member):
+    """Allow a user to make another whitelist submission on the same day."""
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            CDDiscordServer = client.get_guild(cfg['DiscordServer_ID'])
+            rows = sqlitecursor.execute("SELECT steamID FROM whitelistSteamIDs WHERE discordID = ?", (user_to_permit.id,)).fetchall()
+            # user has a steamID recorded
+            if (len(rows) >= 1):
+                # set the changedOn to a day ago
+                sqlitecursor.execute("UPDATE whitelistSteamIDs SET changedOnEpoch = ? WHERE discordID = ?", (int(time.time()) - cfg['secondsBetweenWhitelistUpdates'], str(user_to_permit.id)))
+                await interaction.response.send_message(user_to_permit.mention + " is now permitted to make an additional whitelist submission today.")
+            else:
+                # user hasn't made a submission yet
+                await interaction.response.send_message(user_to_permit.mention + " hasn't made a submission yet, no permit needed.")
+        sqlite.commit()
+
+@group_MultiWL.command()
+async def sync(interaction: discord.Interaction):
+    """Forces the whitelists on the server to update. Use sparingly."""
+    await interaction.response.send_message("Syncing Patreon whitelists.")
+    await client.updatePatreonWhitelists()
+
+@group_MultiWL.command()
+async def sendpanel(interaction: discord.Interaction, channel: discord.TextChannel):
+    """Sends the Multi-Whitelist Control Panel to the selected channel"""
+    await interaction.response.send_message("Panel created", ephemeral=True)
+    await client.sendWhitelistModal(channelID=channel.id)
+
+@group_MultiWL.command()
+async def whiteliststatus(interaction: discord.Interaction, user_to_check: discord.Member):
+    """Check the whitelist status for a discord user."""
+    description = "**Whitelist Status for Discord Member " + user_to_check.name + "**\n"+client.getWhitelistStatus(user_to_check.id, thirdPerson=True)
+    await interaction.response.send_message(description)
+
+@group_MultiWL.command()
+async def editwhitelist(interaction: discord.Interaction, user_to_edit: discord.Member):
+    """Make changes to a user's whitelist"""
+    try:
+        maxWhitelists = client.getMaxWhitelistsByDiscordID(user_to_edit.id)
+        currentSteamIDs = client.getWhitelistIdsFromDiscordID(user_to_edit.id)
+        modal = modal_EditWhitelists(maxWhitelists, currentSteamIDs, isAdminEditing=True, adminIsEditingID=user_to_edit.id)
+        await interaction.response.send_modal(modal)
+    except Exception as e: # work on python 3.x
+        logging.error(e)
+        traceback.print_stack()
+
+@group_MultiWL.command()
+async def linkrole(interaction: discord.Interaction, role: discord.Role, maxwhitelists: int):
+    """Give a role a number of Whitelists users can self-manage."""
+    if (maxwhitelists < 1):
+        await interaction.response.send_message(f"Error: `{maxwhitelists}` must be greater than zero.", ephemeral=True)
+        return
+    await interaction.response.send_message(f"Members with {role.mention} can now put up to `{maxwhitelists}` steamIDs on their personal whitelist.", ephemeral=True)
+    await client.logMsg("MultiWhitelist", f"{interaction.user.mention} updated {role.mention} to max of `{maxwhitelists}` WLs.")
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            sqlitecursor.execute("INSERT INTO multiwl_RolesWhitelists(roleID,numWhitelists) VALUES(?,?) ON CONFLICT(roleID) DO UPDATE SET numWhitelists=?", (str(role.id),maxwhitelists,maxwhitelists))
+        sqlite.commit()
+
+@group_MultiWL.command()
+async def listroles(interaction: discord.Interaction):
+    """List all roles with configured multi-whitelist slots."""
+    rolesStr = '__All Roles with multi-whitelist slots:__\n'
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            for roleID,numWhitelists in sqlitecursor.execute("SELECT roleID,numWhitelists FROM multiwl_RolesWhitelists").fetchall():
+                rolesStr += f"<@&{roleID}>: max `{numWhitelists}` SteamIDs\n"
+    await interaction.response.send_message(content=rolesStr.strip('\n'))
+
+@group_MultiWL.command()
+async def unlinkrole(interaction: discord.Interaction, role: discord.Role):
+    """Unlink a role from having any whitelists."""
+    await interaction.response.send_message(f"Members with {role.mention} will no longer receive any whitelist slots.", ephemeral=True)
+    await client.logMsg("MultiWhitelist", f"{interaction.user.mention} unlinked {role.mention}. ")
+    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+        with closing(sqlite.cursor()) as sqlitecursor:
+            sqlitecursor.execute("DELETE FROM multiwl_RolesWhitelists WHERE roleID=?", (str(role.id), ))
+        sqlite.commit()
+  
 #endregion COMMANDS
 
 #region SettingHelpers
