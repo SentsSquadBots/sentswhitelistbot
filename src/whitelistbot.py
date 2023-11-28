@@ -508,7 +508,7 @@ class SquadClient(discord.Client):
 client = SquadClient(intents=intents)
 #endregion SquadClient
 
-#region INTERACTION CLASSES
+#region BUTTONS
 ## User Whitelists ##
 class ButtonWhitelistGatherView(discord.ui.View):
     def __init__(self,):
@@ -665,9 +665,9 @@ class SeedingPoints_Status(discord.ui.Button):
                     description += f"Your points are worth `{ round(userRow[2]*seed_pointworth, 1) }` days of whitelist!\n"
                 wlRow = await (await sqlite.execute("SELECT expires FROM seeding_Whitelists WHERE steamID=?",(userRow[0],))).fetchone()
                 if (wlRow is None):
-                    description += "You do not currently have an active Seeding Whitelist. Join us on Seed and get some points!\n"
+                    description += f"You do not currently have an active Seeding Whitelist. {'But you have enough points that you can redeem!' if userRow[2] >= seed_threshold else '' }\n"
                 else:
-                    description += f"You currently have an **Active** Seeding Whitelist. It will expire <t:{wlRow[0]}:R>\n"
+                    description += f"You currently have an **Active** Seeding Whitelist. It will expire <t:{wlRow[0]}:f> {'. You also have enough points that you can redeem now to extend your Whitelist!' if userRow[2] >= seed_threshold else '' }\n"
         embed = discord.Embed(title='Seeding Points Status', description=description.strip('\n'))
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -718,7 +718,7 @@ class SeedingPoints_AutoRedeem(discord.ui.Button):
             await sqlite.execute("UPDATE seeding_Users SET isBanking=? WHERE discordID=?", (isNowBanking,interaction.user.id))
             await sqlite.commit()
   
-#endregion INTERACTION CLASSES
+#endregion BUTTONS
 
 #region CONFIG
 cfg={}
@@ -951,8 +951,8 @@ class modal_Seeding_Redeem(ui.Modal, title='Redeem Points!'):
             await sqlite.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (self.steamID, ts_now + secondsToAdd,secondsToAdd))
             await sqlite.execute("UPDATE seeding_Users SET points = points-? WHERE steamID = ?", (pointsToRedeem,self.steamID))
             await sqlite.commit()
-        logging.info(f"Redeem: SteamID {self.steamID} - tsnow {ts_now} - points {pointsToRedeem} - worth {seed_pointworth} - sec to add {secondsToAdd}")
-        await interaction.response.send_message(f"You successfully redeemed `{pointsToRedeem}` points to SteamID `{self.steamID}`. Please allow 1 minute for changes to show in your Status", ephemeral=True)
+        #logging.info(f"Redeem: SteamID {self.steamID} - tsnow {ts_now} - points {pointsToRedeem} - worth {seed_pointworth} - sec to add {secondsToAdd}")
+        await interaction.response.send_message(f"You successfully redeemed `{pointsToRedeem}` points to SteamID `{self.steamID}`. Go check your Status!", ephemeral=True)
 
 #endregion MODALS
 
@@ -2172,7 +2172,7 @@ async def steamAuthEndpoint_authorize(request:web.Request):
                 sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?) ON CONFLICT(steamID) DO UPDATE SET discordID=?",
                                      (steamID,discordID,isBanking,0,discordID))
             sqlite.commit()
-        return web.Response(text=f"Thank you, your SteamID {steamID} has been linked to your DiscordID {discordID}. You can now close this tab and return to Discord.")
+        return web.Response(text=f"Thank you, your SteamID {steamID} has been linked to your DiscordID {discordID}. You can now close this tab and check your status with the Check Status button in the Seeding Points panel in Discord.")
     except:
         return web.Response(text="Your authorization is missing your discordID somehow. Please try again.")
 #endregion SteamAuth
