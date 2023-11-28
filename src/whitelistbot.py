@@ -1671,7 +1671,7 @@ def getSettingI(key:str, default = None):
                 return int(sqlitecursor.execute("SELECT value FROM keyvals WHERE key=?", (key,)).fetchall()[0][0])
             except:
                 return default
-def getSettingF(key:str, default = None):
+def getSettingF(key:str, default = None) -> (float | None):
     with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
         with closing(sqlite.cursor()) as sqlitecursor:
             try:
