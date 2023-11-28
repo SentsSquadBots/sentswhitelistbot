@@ -1635,7 +1635,6 @@ async def getAllPlayersBM(bmID, bmAPIkey):
 
 async def seedingAssignPoints():
     """Assign 1 point to every player on each server if that server meets the seeding requirements."""
-    global currentPlayers
     # uses async sqlite
     async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
         # Check each server to see if they're seeding
