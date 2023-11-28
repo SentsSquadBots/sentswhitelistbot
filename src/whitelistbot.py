@@ -1678,19 +1678,17 @@ async def seedingPurgeExpiredWLs():
         await sqlite.execute("DELETE FROM seeding_Whitelists WHERE expires < ?", (int(datetime.now().timestamp()),))
         await sqlite.commit()
 
-def seedingAutoRedeem():
+async def seedingAutoRedeem():
     """Get all users where points > seed_threshold and isBanking is 0, and redeem their WL."""
     seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
     seed_pointworth = getSettingI('seed_pointworth', Defaults['seed_pointworth'])
     ts_now = int(datetime.now().timestamp())
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            rows = sqlitecursor.execute("SELECT steamID,discordID,isBanking,points FROM seeding_Users WHERE points >= ? AND isBanking = 0", (seed_threshold,)).fetchall()
-            for steamID,discordID,isBanking,points in rows:
-                secondsToAdd = int((datetime.now() + timedelta(days= points*seed_pointworth )).timestamp()) - int(datetime.now().timestamp())
-                sqlitecursor.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (steamID, ts_now + secondsToAdd,secondsToAdd))
-                sqlitecursor.execute("UPDATE seeding_Users SET points = 0 WHERE steamID = ?", (steamID,))
-        sqlite.commit()
+    async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+        for steamID,discordID,isBanking,points in await sqlite.execute_fetchall("SELECT steamID,discordID,isBanking,points FROM seeding_Users WHERE points >= ? AND isBanking = 0", (seed_threshold,)):
+            secondsToAdd = int((datetime.now() + timedelta(days= points*seed_pointworth )).timestamp()) - int(datetime.now().timestamp())
+            await sqlite.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (steamID, ts_now + secondsToAdd,secondsToAdd))
+            await sqlite.execute("UPDATE seeding_Users SET points = 0 WHERE steamID = ?", (steamID,))
+        await sqlite.commit()
 
 async def seedingGenerateCFG():
     whitelistStr = 'Group=SeedingWL:reserve\n'
@@ -2000,7 +1998,7 @@ if (cfg.get('featureEnable_Seeding', False)):
     @aiocron.crontab("* * * * * 15") # Runs every 15th second of every minute
     async def autoSeeding():
         await seedingAssignPoints()
-        seedingAutoRedeem()
+        await seedingAutoRedeem()
         await seedingPurgeExpiredWLs()
         await seedingGenerateCFG()
 
