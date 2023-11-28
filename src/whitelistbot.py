@@ -1367,6 +1367,23 @@ async def unlinkrole(interaction: discord.Interaction, role: discord.Role):
 
 if (cfg.get('featureEnable_Seeding', False)):
     @group_Seeding.command()
+    async def config(interaction: discord.Interaction):
+        """View all current settings for Seeding feature."""
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+
+                ...
+        await interaction.response.send_message(f"""
+__Seeding Settings__\n
+- threshold needed before redeeming: {getSettingS('seed_threshold', Defaults['seed_threshold'])}\n
+- points are worth in days: {getSettingS('seed_pointworth', Defaults['seed_pointworth'])}\n
+- admins accrue seed points: {getSettingS('seed_adminsaccrue', Defaults['seed_adminsaccrue'])}\n
+- minPlayers needed to accrue: {getSettingS('seed_minplayers', Defaults['seed_minplayers'])}\n
+- maxPlayers that can accrue: {getSettingS('seed_maxplayers', Defaults['seed_maxplayers'])}\n
+- point cap (0 is no cap): {getSettingS('seed_pointcap', Defaults['seed_pointcap'])}\n
+""")
+
+    @group_Seeding.command()
     async def addserver(interaction: discord.Interaction, bmid: int, bmapikey: str):
         """Add a server to retrieve seeders from."""
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
