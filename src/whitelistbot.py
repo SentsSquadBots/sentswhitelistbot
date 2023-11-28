@@ -1616,68 +1616,67 @@ async def getAllPlayersBM(bmID, bmAPIkey):
 async def seedingAssignPoints():
     """Assign 1 point to every player on each server if that server meets the seeding requirements."""
     global currentPlayers
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            # Check each server to see if they're seeding
-            for bmID,bmAPIkey in sqlitecursor.execute("SELECT bmID,bmAPIkey FROM seeding_Servers").fetchall():
-                try:
-                    currentmapResp = await getCurrentMapBM(bmID)
-                    seedSteamIDsAll = None
-                    logging.info(f"Current map: {currentmapResp}")
-                    if currentmapResp is None: continue
-                    # Check if we're currently on a seed map
-                    if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
-                        seedSteamIDs = await getAllPlayersBM(bmID,bmAPIkey)
-                        if seedSteamIDs is None: continue
-                        seedSteamIDsAll = seedSteamIDs.copy()
-                        # Check if Admins can accrue, if they cannot, check if player is admin, if they are then skip them.
-                        if (cfg.get('featureEnable_SquadGroups', False) and getSettingB('seed_adminsaccrue', Defaults['seed_adminsaccrue']) == False):
-                            seedSteamIDs = removeAdmins(seedSteamIDs)
-                        # If the playercount is outside the threshold of min and max players, don't assign any points
-                        if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
-                            logging.info(f"We're on a seed layer but player count outside of range")
+    # uses async sqlite
+    async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+        # Check each server to see if they're seeding
+        for bmID,bmAPIkey in await sqlite.execute_fetchall("SELECT bmID,bmAPIkey FROM seeding_Servers"):
+            try:
+                currentmapResp = await getCurrentMapBM(bmID)
+                seedSteamIDsAll = None
+                logging.info(f"[{bmID}] Current map: {currentmapResp}")
+                if currentmapResp is None: continue
+                # Check if we're currently on a seed map
+                if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
+                    seedSteamIDs = await getAllPlayersBM(bmID,bmAPIkey)
+                    if seedSteamIDs is None: continue
+                    seedSteamIDsAll = seedSteamIDs.copy()
+                    # Check if Admins can accrue, if they cannot, check if player is admin, if they are then skip them.
+                    if (cfg.get('featureEnable_SquadGroups', False) and getSettingB('seed_adminsaccrue', Defaults['seed_adminsaccrue']) == False):
+                        seedSteamIDs = removeAdmins(seedSteamIDs)
+                    # If the playercount is outside the threshold of min and max players, don't assign any points
+                    if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
+                        logging.info(f"We're on a seed layer but player count outside of range")
+                        continue
+                    logging.info(f"Current seeders: {seedSteamIDs}")
+                    ## Give all players 1 seeding point
+                    for steamID in seedSteamIDs:
+                        pointRow = await (await sqlite.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,))).fetchone()
+                        if (not pointRow):
+                            isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
+                            await sqlite.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?)", (steamID,None,isBanking,1))
+                        else:
+                            pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
+                            if (pointCap == 0 or pointRow[0] < pointCap):
+                                await sqlite.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
+                
+                ## Track Admin time ##
+                if (cfg.get('featureEnable_SquadGroups', False) and getSettingI('seed_trackadmins', Defaults['seed_trackadmins'])):
+                    if (seedSteamIDsAll is None):
+                        seedSteamIDsAll = await getAllPlayersBM(bmID,bmAPIkey)
+                    steamIDsAdmins = filterAdmins(seedSteamIDsAll)
+                    if len(steamIDsAdmins) > 0:
+                        if getSettingI('seed_minplayers', Defaults['seed_minplayers']) > 0 and len(seedSteamIDsAll) < getSettingI('seed_minplayers', Defaults['seed_minplayers']):
+                            logging.info(f"Not recording admin acivity, playercount under threshold.")
                             continue
-                        logging.info(f"Current seeders: {seedSteamIDs}")
-                        ## Give all players 1 seeding point
-                        for steamID in seedSteamIDs:
-                            pointRow = sqlitecursor.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,)).fetchone()
-                            if (not pointRow):
-                                isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
-                                sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?)", (steamID,None,isBanking,1))
-                            else:
-                                pointCap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
-                                if (pointCap == 0 or pointRow[0] < pointCap):
-                                    sqlitecursor.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
-                    
-                    ## Track Admin time ##
-                    if (cfg.get('featureEnable_SquadGroups', False) and getSettingI('seed_trackadmins', Defaults['seed_trackadmins'])):
-                        if (seedSteamIDsAll is None):
-                            seedSteamIDsAll = await getAllPlayersBM(bmID,bmAPIkey)
-                        steamIDsAdmins = filterAdmins(seedSteamIDsAll)
-                        if len(steamIDsAdmins) > 0:
-                            if getSettingI('seed_minplayers', Defaults['seed_minplayers']) > 0 and len(seedSteamIDsAll) < getSettingI('seed_minplayers', Defaults['seed_minplayers']):
-                                logging.info(f"Not recording admin acivity, playercount under threshold.")
-                                continue
-                            logging.info(f"Recording activity of {len(steamIDsAdmins)} online admins.")
-                            logging.info(f"Admins: {steamIDsAdmins}")
-                        for steamID in steamIDsAdmins:
-                            if 'Jensen' in currentmapResp:
-                                sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnJensens) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnJensens = minutesOnJensens + 1", (steamID,1))
-                            elif 'Seed' in currentmapResp:
-                                sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnSeed) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnSeed = minutesOnSeed + 1", (steamID,1))
-                            else:
-                                sqlitecursor.execute("INSERT INTO adminTracking(steamID,minutesOnLive) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnLive = minutesOnLive + 1", (steamID,1))
-                except Exception as e: 
-                    logging.error(e)
-                    continue
-        sqlite.commit()
+                        logging.info(f"Recording activity of {len(steamIDsAdmins)} online admins.")
+                        logging.info(f"Admins: {steamIDsAdmins}")
+                    for steamID in steamIDsAdmins:
+                        if 'Jensen' in currentmapResp:
+                            await sqlite.execute("INSERT INTO adminTracking(steamID,minutesOnJensens) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnJensens = minutesOnJensens + 1", (steamID,1))
+                        elif 'Seed' in currentmapResp:
+                            await sqlite.execute("INSERT INTO adminTracking(steamID,minutesOnSeed) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnSeed = minutesOnSeed + 1", (steamID,1))
+                        else:
+                            await sqlite.execute("INSERT INTO adminTracking(steamID,minutesOnLive) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnLive = minutesOnLive + 1", (steamID,1))
+            except Exception as e: 
+                logging.error(e)
+                continue
+        await sqlite.commit()
 
-def seedingPurgeExpiredWLs():
+async def seedingPurgeExpiredWLs():
     """Look through the seeding whitelists and remove any expired ones"""
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            sqlitecursor.execute("DELETE FROM seeding_Whitelists WHERE expires < ?", (int(datetime.now().timestamp()),))
-        sqlite.commit()
+    async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+        await sqlite.execute("DELETE FROM seeding_Whitelists WHERE expires < ?", (int(datetime.now().timestamp()),))
+        await sqlite.commit()
 
 def seedingAutoRedeem():
     """Get all users where points > seed_threshold and isBanking is 0, and redeem their WL."""
@@ -1693,12 +1692,11 @@ def seedingAutoRedeem():
                 sqlitecursor.execute("UPDATE seeding_Users SET points = 0 WHERE steamID = ?", (steamID,))
         sqlite.commit()
 
-def seedingGenerateCFG():
+async def seedingGenerateCFG():
     whitelistStr = 'Group=SeedingWL:reserve\n'
-    with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
-        with closing(sqlite.cursor()) as sqlitecursor:
-            for steamID,expires in sqlitecursor.execute("SELECT steamID,expires FROM seeding_Whitelists").fetchall():
-                whitelistStr += f"Admin={steamID}:SeedingWL // Expires on TS {expires}\n"
+    async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+        for steamID,expires in await sqlite.execute_fetchall("SELECT steamID,expires FROM seeding_Whitelists"):
+            whitelistStr += f"Admin={steamID}:SeedingWL // Expires on TS {expires}\n"
         
     with open(cfg['seeding_outputFile'], "w") as f:
         f.write(whitelistStr)
@@ -2003,8 +2001,8 @@ if (cfg.get('featureEnable_Seeding', False)):
     async def autoSeeding():
         await seedingAssignPoints()
         seedingAutoRedeem()
-        seedingPurgeExpiredWLs()
-        seedingGenerateCFG()
+        await seedingPurgeExpiredWLs()
+        await seedingGenerateCFG()
 
 
 async def main():
