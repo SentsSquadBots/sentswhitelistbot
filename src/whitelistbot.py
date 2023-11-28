@@ -647,6 +647,7 @@ class SeedingPointsView(discord.ui.View):
         self.add_item(SeedingPoints_Link())
         self.add_item(SeedingPoints_Status())
         self.add_item(SeedingPoints_Redeem())
+        self.add_item(SeedingPoints_AutoRedeem())
 
 class SeedingPoints_Status(discord.ui.Button):
     def __init__(self):
@@ -654,19 +655,18 @@ class SeedingPoints_Status(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         embed = discord.Embed(title='Seeding Points Status', description="TODO")
-        await interaction.response.send_message(content=f"TODO", embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class SeedingPoints_Link(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Verify SteamID",style=discord.ButtonStyle.secondary, emoji='✔️', custom_id="SeedingPoints_Link")
+        super().__init__(label="Verify SteamID",style=discord.ButtonStyle.secondary, emoji='✅', custom_id="SeedingPoints_Link")
 
     async def callback(self, interaction: discord.Interaction):
         steamLogin = SteamSignIn()
         encodedData = steamLogin.ConstructURL(f"http://{os.getenv('steamAuthEndpoint_Host', '127.0.0.1')}:{os.getenv('steamAuthEndpoint_Port', '42879')}/authorize?discordid={interaction.user.id}")
-        steam_openid_url = 'https://steamcommunity.com/openid/login'
-        auth_url = steam_openid_url + "?" + encodedData
+        auth_url = 'https://steamcommunity.com/openid/login' + "?" + encodedData
         embed = discord.Embed(title='Verify your SteamID', description=f"[Click here to log into your Steam Account to verify.]({auth_url})")
-        await interaction.response.send_message(content="", embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class SeedingPoints_Redeem(discord.ui.Button):
     def __init__(self):
@@ -674,6 +674,25 @@ class SeedingPoints_Redeem(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_message(content=f"TODO", ephemeral=True)
+
+class SeedingPoints_AutoRedeem(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Auto Redeem Toggle",style=discord.ButtonStyle.secondary, emoji='∞', custom_id="SeedingPoints_AutoRedeem")
+
+    async def callback(self, interaction: discord.Interaction):
+        async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+            row = await (await sqlite.execute("SELECT steamID,discordID,isBanking FROM seeding_Users WHERE discordID=?"), (interaction.user.id,)).fetchone()
+            if (row is None):
+                await interaction.response.send_message(content=f"Error. You have not verified your Steam account yet. Please use the `Verify SteamID` button first.", ephemeral=True)
+                return
+            isNowBanking = 1 - row['isBanking']
+            if (isNowBanking == 1):
+                await interaction.response.send_message(content=f"Auto Redeem is now **OFF**", ephemeral=True)
+            else:
+                await interaction.response.send_message(content=f"Auto Redeem is now **ON**", ephemeral=True)
+            await sqlite.execute("UPDATE seeding_Users SET isBanking=? WHERE discordID=?", (isNowBanking,interaction.user.id))
+            await sqlite.commit()
+
 ######### END INTERACTION CLASSES #########
 
 
@@ -1530,10 +1549,11 @@ __Seeding Settings__\n
             description=f"""
 Use the buttons below to manage and redeem your stored seeding points. 
 You gain 1 seeding point per minute you spend on our server while seeding. You can redeem these points for free whitelist! 
+You can also enable AutoRedeem and as you hit the point threshold, the bot will automatically redeem your points for whitelist.
 To get started:
 - Verify your Steam account by logging into Steam through the `Verify SteamID` button below. 
 - Once verified, check your current seeding points with the `Check Status` button. It will show you how much whitelist they are worth.
-- Redeem some or all of your points for whitelist with the `Redeem Now` button!
+- Redeem some or all of your points for whitelist with the `Redeem Now` button! (Or enable AutoRedeem if you're lazy)
 
 *Why do I need to sign in through Steam?* Because this way we confirm you own the Steam account you're trying to redeem points for. The only information we store from Steam is your SteamID. You can choose not to use this service.
             """)
