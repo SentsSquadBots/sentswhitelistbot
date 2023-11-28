@@ -658,23 +658,22 @@ class SeedingPoints_Status(discord.ui.Button):
         seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
         seed_pointworth = getSettingF('seed_pointworth', Defaults['seed_pointworth'])
         async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
-            steamIDs = ''
-            points = 0
-            isBankingA = 0
-            for steamID,isBanking,point in await sqlite.execute_fetchall("SELECT steamID,isBanking,points FROM seeding_Users WHERE discordID=?", (interaction.user.id, )):
-                steamIDs += f'{steamID}, '
-                points += point
-                isBankingA = isBanking
-            if (steamIDs == ''):
+            userRow = await (await sqlite.execute("SELECT steamID,isBanking,points FROM seeding_Users WHERE discordID=?", (interaction.user.id, ))).fetchone()
+            if (userRow is None):
                 description += f"You have not verified your Steam account yet. Please use the `Verify SteamID` button first."
             else:
-                description += f"Verified SteamID(s): `{steamIDs.strip(', ')}`\n"
-                description += f"Auto Redeem: `{ 'ON' if isBankingA == 0 else 'OFF' }`\n"
-                description += f"Seeding Points: `{points}`\n"
-                if (points < seed_threshold):
+                description += f"Verified SteamID: `{userRow[0]}`\n"
+                description += f"Auto Redeem: `{ 'ON' if userRow[1] == 0 else 'OFF' }`\n"
+                description += f"Seeding Points: `{userRow[2]}`\n"
+                if (userRow[2] < seed_threshold):
                     description += f"You must have at least `{ seed_threshold }` points in order to redeem them.\n"
-                if (points >= seed_threshold):
-                    description += f"Your points are worth `{ round(points*seed_pointworth, 1) }` days of whitelist!\n"
+                if (userRow[2] >= seed_threshold):
+                    description += f"Your points are worth `{ round(userRow[2]*seed_pointworth, 1) }` days of whitelist!\n"
+                wlRow = await (await sqlite.execute("SELECT expires FROM seeding_Whitelists WHERE steamID=?",(userRow[0],))).fetchone()
+                if (wlRow is None):
+                    description += "You do not currently have an active Seeding Whitelist. Join us on Seed and get some points!\n"
+                else:
+                    description += f"You currently have an **Active** Seeding Whitelist. It will expire <t:{wlRow[0]}:R>\n"
         embed = discord.Embed(title='Seeding Points Status', description=description.strip('\n'))
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -696,14 +695,16 @@ class SeedingPoints_Redeem(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
         async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
-            points = (await (await sqlite.execute("SELECT SUM(points) FROM seeding_Users WHERE discordID=?", (interaction.user.id, ))).fetchone())[0]
+            row = await (await sqlite.execute("SELECT SUM(points), steamID FROM seeding_Users WHERE discordID=?", (interaction.user.id, ))).fetchone()
+            points = row[0]
+            steamID = row[1]
         if (points is None):
             await interaction.response.send_message(content=f"Error. You have not verified your Steam account yet. Please use the `Verify SteamID` button first.", ephemeral=True)
             return
         if (points < seed_threshold):
             await interaction.response.send_message(content=f"Sorry, you need at least `{seed_threshold}` points before you can redeem them. You only have `{points}`", ephemeral=True)
             return
-        await interaction.response.send_message(content=f"TODO redeem", ephemeral=True)
+        await interaction.response.send_modal(modal_Seeding_Redeem(points, steamID))
 
 class SeedingPoints_AutoRedeem(discord.ui.Button):
     def __init__(self):
@@ -722,7 +723,7 @@ class SeedingPoints_AutoRedeem(discord.ui.Button):
                 await interaction.response.send_message(content=f"Auto Redeem is now **ON**", ephemeral=True)
             await sqlite.execute("UPDATE seeding_Users SET isBanking=? WHERE discordID=?", (isNowBanking,interaction.user.id))
             await sqlite.commit()
-
+  
 ######### END INTERACTION CLASSES #########
 
 
@@ -929,6 +930,42 @@ class modal_PayPal_ConfirmPayment(ui.Modal, title='Verify your email.'):
                 sqlitecursor.execute("INSERT INTO paypal_PendingTransactions(discordID, email, timestamp) VALUES (?,?,?)", ( str(interaction.user.id), email, int(time.time()) ))
             sqlite.commit()
         await client.logMsg("PayPal WL", f"{interaction.user.mention} entered their email as `{email}`. Adding to the processing queue.")
+
+## Seeding ##
+class modal_Seeding_Redeem(ui.Modal, title='Redeem Points!'):
+    maxPoints = 0
+    steamID = ""
+    def __init__(self, maxPoints, steamID):
+        super().__init__()
+        self.points_Input = ui.TextInput(label="Redeem how many points?", style=discord.TextStyle.short, default=str(maxPoints))
+        self.add_item(self.points_Input)
+        self.maxPoints = maxPoints
+        self.steamID = steamID
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        pointsToRedeem = str(self.points_Input).strip()
+        seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
+        seed_pointworth = getSettingF('seed_pointworth', Defaults['seed_pointworth'])
+        try:
+            pointsToRedeem = int(pointsToRedeem)
+        except:
+            await interaction.response.send_message(f"ERROR. Whole numbers only. Please try again", ephemeral=True)
+            return
+        if (pointsToRedeem < seed_threshold):
+            await interaction.response.send_message(f"ERROR. You must redeem at least {seed_threshold} points.", ephemeral=True)
+            return
+        pointsToRedeem = min(pointsToRedeem, self.maxPoints)
+
+        # Redeem them
+        ts_now = int(datetime.now().timestamp())
+        secondsToAdd = int((datetime.now() + timedelta(days= pointsToRedeem*seed_pointworth )).timestamp()) - int(datetime.now().timestamp())
+        async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+            await sqlite.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (self.steamID, ts_now + secondsToAdd,secondsToAdd))
+            await sqlite.execute("UPDATE seeding_Users SET points = points-? WHERE steamID = ?", (pointsToRedeem,self.steamID))
+            await sqlite.commit()
+        logging.info(f"Redeem: SteamID {self.steamID} - tsnow {ts_now} - points {pointsToRedeem} - worth {seed_pointworth} - sec to add {secondsToAdd}")
+        await interaction.response.send_message(f"You successfully redeemed `{pointsToRedeem}` points to SteamID `{self.steamID}`. Please allow 1 minute for changes to show in your Status", ephemeral=True)
+
 
 ################ COMMANDS ################
 
@@ -1595,7 +1632,7 @@ __The current global settings are__:
 - You receive `1` seed point every minute you are on the server while the player count is between `{seed_minplayers}` and `{seed_maxplayers}`.
 - Points are {'not capped' if seed_pointcap == 0 else 'capped at ' + seed_pointcap}
 - A single seed point is worth `{seed_pointworth}` days of whitelist. 
-  - That means to get 30 days of whitelist, you'd need to seed for a total of `{round(30/seed_pointworth/60,1)}` hours. That's {round(30/seed_pointworth,1)} points.
+  - That means to get 30 days of whitelist, you'd need to seed for a total of `{round(30/seed_pointworth/60,1)}` hours. That's `{round(30/seed_pointworth,1)}` points.
 __FAQ__:
 *Why do I need to sign in through Steam?* 
 Because this way we confirm you own the Steam account you're trying to redeem points for. The only information we store from Steam is your SteamID. You can choose not to use this service.
@@ -1605,7 +1642,6 @@ Because this way we confirm you own the Steam account you're trying to redeem po
             await channel.send(embed=embed, view=view)
         except Exception as e:
             logging.error(e)
-
 
     @group_Seeding.command()
     async def debug(interaction: discord.Interaction):
@@ -1743,7 +1779,7 @@ async def seedingPurgeExpiredWLs():
 async def seedingAutoRedeem():
     """Get all users where points > seed_threshold and isBanking is 0, and redeem their WL."""
     seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
-    seed_pointworth = getSettingI('seed_pointworth', Defaults['seed_pointworth'])
+    seed_pointworth = getSettingF('seed_pointworth', Defaults['seed_pointworth'])
     ts_now = int(datetime.now().timestamp())
     async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
         for steamID,discordID,isBanking,points in await sqlite.execute_fetchall("SELECT steamID,discordID,isBanking,points FROM seeding_Users WHERE points >= ? AND isBanking = 0", (seed_threshold,)):
@@ -2141,6 +2177,7 @@ async def steamAuthEndpoint_authorize(request:web.Request):
         discordID = request.rel_url.query['discordid']
         with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
             with closing(sqlite.cursor()) as sqlitecursor:
+                sqlitecursor.execute("UPDATE seeding_Users SET discordID = NULL WHERE discordID=?", (discordID,)) # Only allow linking a discord account to ONE steamID
                 isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
                 sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?) ON CONFLICT(steamID) DO UPDATE SET discordID=?",
                                      (steamID,discordID,isBanking,0,discordID))
