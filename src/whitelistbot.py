@@ -37,9 +37,7 @@ import aiohttp
 from aiohttp import web
 from ast import literal_eval
 import logging
-
-
-
+import aiosqlite
 
 # For settings configurable via Discord commands, these are the defaults if no value is set.
 Defaults = {

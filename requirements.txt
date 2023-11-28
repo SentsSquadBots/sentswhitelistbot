@@ -8,3 +8,4 @@ patreon
 aiohttp
 python-dotenv
 steamsignin
+aiosqlite
