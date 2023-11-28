@@ -659,7 +659,7 @@ class SeedingPoints_Status(discord.ui.Button):
 
 class SeedingPoints_Link(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Verify SteamID",style=discord.ButtonStyle.secondary, emoji='✅', custom_id="SeedingPoints_Link")
+        super().__init__(label="Verify SteamID",style=discord.ButtonStyle.secondary, emoji='✔️', custom_id="SeedingPoints_Link")
 
     async def callback(self, interaction: discord.Interaction):
         steamLogin = SteamSignIn()
@@ -670,22 +670,22 @@ class SeedingPoints_Link(discord.ui.Button):
 
 class SeedingPoints_Redeem(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Redeem Now",style=discord.ButtonStyle.secondary, emoji='↻', custom_id="SeedingPoints_Redeem")
+        super().__init__(label="Redeem Now",style=discord.ButtonStyle.secondary, emoji='🔄', custom_id="SeedingPoints_Redeem")
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_message(content=f"TODO", ephemeral=True)
 
 class SeedingPoints_AutoRedeem(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Auto Redeem Toggle",style=discord.ButtonStyle.secondary, emoji='∞', custom_id="SeedingPoints_AutoRedeem")
+        super().__init__(label="Auto Redeem Toggle",style=discord.ButtonStyle.secondary, emoji='♾️', custom_id="SeedingPoints_AutoRedeem")
 
     async def callback(self, interaction: discord.Interaction):
         async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
-            row = await (await sqlite.execute("SELECT steamID,discordID,isBanking FROM seeding_Users WHERE discordID=?"), (interaction.user.id,)).fetchone()
+            row = await (await sqlite.execute("SELECT steamID,discordID,isBanking FROM seeding_Users WHERE discordID=?", (interaction.user.id,))).fetchone()
             if (row is None):
                 await interaction.response.send_message(content=f"Error. You have not verified your Steam account yet. Please use the `Verify SteamID` button first.", ephemeral=True)
                 return
-            isNowBanking = 1 - row['isBanking']
+            isNowBanking = 1 - row[2]
             if (isNowBanking == 1):
                 await interaction.response.send_message(content=f"Auto Redeem is now **OFF**", ephemeral=True)
             else:
