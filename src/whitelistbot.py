@@ -646,8 +646,9 @@ class PayPalWhitelist_Status(discord.ui.Button):
 class SeedingPointsView(discord.ui.View):
     def __init__(self,):
         super().__init__(timeout=None)
-        self.add_item(SeedingPoints_Status())
         self.add_item(SeedingPoints_Link())
+        self.add_item(SeedingPoints_Status())
+        self.add_item(SeedingPoints_Redeem())
 
 class SeedingPoints_Status(discord.ui.Button):
     def __init__(self):
@@ -669,6 +670,12 @@ class SeedingPoints_Link(discord.ui.Button):
         embed = discord.Embed(title='Verify your SteamID', description=f"[Click here to log into your Steam Account to verify.]({auth_url})")
         await interaction.response.send_message(content="", embed=embed, ephemeral=True)
 
+class SeedingPoints_Redeem(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Redeem Now",style=discord.ButtonStyle.secondary, emoji='↻', custom_id="SeedingPoints_Redeem")
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(content=f"TODO", ephemeral=True)
 ######### END INTERACTION CLASSES #########
 
 
@@ -679,48 +686,49 @@ client = SquadClient(intents=intents)
 
 ######### CONFIG #########
 cfg={}
-cfg['CommunityName']=os.getenv('CommunityName', 'No Name Set')
-cfg['CommunityLogoUrlPNG']=os.getenv('CommunityLogoUrlPNG', 'No Logo Set')
-cfg['DiscordServer_ID']=int(os.getenv('DiscordServer_ID', 0))
-cfg['discord_token']=os.getenv('discord_token', 'No Token Set')
-cfg['sqlite_db_file']=os.path.join(os.getenv('container_db_folder', ''), os.getenv('sqlite_db_file', 'sqlite.db'))
-cfg['steam_API_key']=os.getenv('steam_API_key', 'No Steam API Key Set')
-cfg['do_log']=os.getenv('do_log', 'False').lower() in ('true', '1', 'y')
-cfg['log_channel_ID']=int(os.getenv('log_channel_ID', '0'))
-cfg['featureEnable_Paypal']=os.getenv('featureEnable_Paypal', 'False').lower() in ('true', '1', 'y')
-cfg['paypal_clientID']=os.getenv('paypal_clientID', '')
-cfg['paypal_clientSecret']=os.getenv('paypal_clientSecret', '')
-cfg['paypal_checkoutLink']=os.getenv('paypal_checkoutLink', '')
-cfg['paypal_singleWhitelistCosts']=os.getenv('paypal_singleWhitelistCosts', '5')
-cfg['paypal_currency']=os.getenv('paypal_currency', 'USD')
-cfg['paypal_roles']=literal_eval(os.getenv('paypal_roles', '[]'))
-cfg['featureEnable_PickMonthlyWhitelists']=os.getenv('featureEnable_PickMonthlyWhitelists', 'False').lower() in ('true', '1', 'y')
-cfg['featureClanWhitelists']=os.getenv('featureClanWhitelists', 'False').lower() in ('true', '1', 'y')
-cfg['featureEnable_SquadGroups']=os.getenv('featureEnable_SquadGroups', 'False').lower() in ('true', '1', 'y')
-cfg['featureEnable_WhitelistAutoUpdate']=os.getenv('featureEnable_WhitelistAutoUpdate', 'False').lower() in ('true', '1', 'y')
-cfg['featurePatreonAudit']=os.getenv('featurePatreonAudit', 'False').lower() in ('true', '1', 'y')
-cfg['featureEnable_PatreonAutoAudit']=os.getenv('featureEnable_PatreonAutoAudit', 'False').lower() in ('true', '1', 'y')
-cfg['featureEnable_Seeding']=os.getenv('featureEnable_Seeding', 'False').lower() in ('true', '1', 'y')
+if True:
+    cfg['CommunityName']=os.getenv('CommunityName', 'No Name Set')
+    cfg['CommunityLogoUrlPNG']=os.getenv('CommunityLogoUrlPNG', 'No Logo Set')
+    cfg['DiscordServer_ID']=int(os.getenv('DiscordServer_ID', 0))
+    cfg['discord_token']=os.getenv('discord_token', 'No Token Set')
+    cfg['sqlite_db_file']=os.path.join(os.getenv('container_db_folder', ''), os.getenv('sqlite_db_file', 'sqlite.db'))
+    cfg['steam_API_key']=os.getenv('steam_API_key', 'No Steam API Key Set')
+    cfg['do_log']=os.getenv('do_log', 'False').lower() in ('true', '1', 'y')
+    cfg['log_channel_ID']=int(os.getenv('log_channel_ID', '0'))
+    cfg['featureEnable_Paypal']=os.getenv('featureEnable_Paypal', 'False').lower() in ('true', '1', 'y')
+    cfg['paypal_clientID']=os.getenv('paypal_clientID', '')
+    cfg['paypal_clientSecret']=os.getenv('paypal_clientSecret', '')
+    cfg['paypal_checkoutLink']=os.getenv('paypal_checkoutLink', '')
+    cfg['paypal_singleWhitelistCosts']=os.getenv('paypal_singleWhitelistCosts', '5')
+    cfg['paypal_currency']=os.getenv('paypal_currency', 'USD')
+    cfg['paypal_roles']=literal_eval(os.getenv('paypal_roles', '[]'))
+    cfg['featureEnable_PickMonthlyWhitelists']=os.getenv('featureEnable_PickMonthlyWhitelists', 'False').lower() in ('true', '1', 'y')
+    cfg['featureClanWhitelists']=os.getenv('featureClanWhitelists', 'False').lower() in ('true', '1', 'y')
+    cfg['featureEnable_SquadGroups']=os.getenv('featureEnable_SquadGroups', 'False').lower() in ('true', '1', 'y')
+    cfg['featureEnable_WhitelistAutoUpdate']=os.getenv('featureEnable_WhitelistAutoUpdate', 'False').lower() in ('true', '1', 'y')
+    cfg['featurePatreonAudit']=os.getenv('featurePatreonAudit', 'False').lower() in ('true', '1', 'y')
+    cfg['featureEnable_PatreonAutoAudit']=os.getenv('featureEnable_PatreonAutoAudit', 'False').lower() in ('true', '1', 'y')
+    cfg['featureEnable_Seeding']=os.getenv('featureEnable_Seeding', 'False').lower() in ('true', '1', 'y')
 
-cfg['paypal_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('paypal_outputFile', 'paypalWLs.cfg'))
-cfg['monthlyWhitelists_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('monthlyWhitelists_outputFile', 'monthlyWLs.cfg'))
-cfg['squadGroups_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('squadGroups_outputFile', 'squadadmins.cfg'))
-cfg['multiwl_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('multiwl_outputFile', 'multiWLs.cfg'))
-cfg['seeding_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('seeding_outputFile', 'seedingWLs.cfg'))
+    cfg['paypal_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('paypal_outputFile', 'paypalWLs.cfg'))
+    cfg['monthlyWhitelists_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('monthlyWhitelists_outputFile', 'monthlyWLs.cfg'))
+    cfg['squadGroups_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('squadGroups_outputFile', 'squadadmins.cfg'))
+    cfg['multiwl_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('multiwl_outputFile', 'multiWLs.cfg'))
+    cfg['seeding_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('seeding_outputFile', 'seedingWLs.cfg'))
 
-cfg['clanMoniker']=os.getenv('clanMoniker', 'Clan')
-cfg['pathToClanWhitelist']=os.getenv('pathToClanWhitelist', 'clanWLs.cfg')
-cfg['clanWhitelists']=literal_eval(os.getenv('clanWhitelists', '{}'))
-cfg['squadGroups_updateCron']=os.getenv('squadGroups_updateCron', '* * * * * */30')
-cfg['secondsBetweenWhitelistUpdates']=int(os.getenv('secondsBetweenWhitelistUpdates', '86400'))
-cfg['whitelistUpdateFreqCron']=os.getenv('whitelistUpdateFreqCron', '* * * * *')
-cfg['patreonAuditFreqCron']=os.getenv('patreonAuditFreqCron', '0 6 1 * *')
-cfg['whitelistDiscordRoleWhitelists']=literal_eval(os.getenv('whitelistDiscordRoleWhitelists', '{}'))
-cfg['patreonTierID_DiscordRoleID']=literal_eval(os.getenv('patreonTierID_DiscordRoleID', '{}'))
-cfg['whitelistsNeedThisDiscordRoleID']=int(os.getenv('whitelistsNeedThisDiscordRoleID', '0'))
-cfg['extraRolesForPatreonSubs']=literal_eval(os.getenv('extraRolesForPatreonSubs', '[]'))
-cfg['patreonAccessToken']=os.getenv('patreonAccessToken', '')
-cfg['fileHost_Port']=int(os.getenv('fileHost_Port', '8084'))
+    cfg['clanMoniker']=os.getenv('clanMoniker', 'Clan')
+    cfg['pathToClanWhitelist']=os.getenv('pathToClanWhitelist', 'clanWLs.cfg')
+    cfg['clanWhitelists']=literal_eval(os.getenv('clanWhitelists', '{}'))
+    cfg['squadGroups_updateCron']=os.getenv('squadGroups_updateCron', '* * * * * */30')
+    cfg['secondsBetweenWhitelistUpdates']=int(os.getenv('secondsBetweenWhitelistUpdates', '86400'))
+    cfg['whitelistUpdateFreqCron']=os.getenv('whitelistUpdateFreqCron', '* * * * *')
+    cfg['patreonAuditFreqCron']=os.getenv('patreonAuditFreqCron', '0 6 1 * *')
+    cfg['whitelistDiscordRoleWhitelists']=literal_eval(os.getenv('whitelistDiscordRoleWhitelists', '{}'))
+    cfg['patreonTierID_DiscordRoleID']=literal_eval(os.getenv('patreonTierID_DiscordRoleID', '{}'))
+    cfg['whitelistsNeedThisDiscordRoleID']=int(os.getenv('whitelistsNeedThisDiscordRoleID', '0'))
+    cfg['extraRolesForPatreonSubs']=literal_eval(os.getenv('extraRolesForPatreonSubs', '[]'))
+    cfg['patreonAccessToken']=os.getenv('patreonAccessToken', '')
+    cfg['fileHost_Port']=int(os.getenv('fileHost_Port', '8084'))
 
 ################ MODALS ################
 ## User Whitelists ##
@@ -1522,7 +1530,14 @@ __Seeding Settings__\n
         try:
             embed = discord.Embed(title="Manage your Seeding Points!", 
             description=f"""
-TODO
+Use the buttons below to manage and redeem your stored seeding points. 
+You gain 1 seeding point per minute you spend on our server while seeding. You can redeem these points for free whitelist! 
+To get started:
+- Verify your Steam account by logging into Steam through the `Verify SteamID` button below. 
+- Once verified, check your current seeding points with the `Check Status` button. It will show you how much whitelist they are worth.
+- Redeem some or all of your points for whitelist with the `Redeem Now` button!
+
+*Why do I need to sign in through Steam?* Because this way we confirm you own the Steam account you're trying to redeem points for. The only information we store from Steam is your SteamID. You can choose not to use this service.
             """)
             embed.add_field(name="​", inline=False, value="Made with ♥ by <@177189581060308992>")
             view = SeedingPointsView()
@@ -1534,7 +1549,7 @@ TODO
     @group_Seeding.command()
     async def debug(interaction: discord.Interaction):
         await interaction.response.send_message(f"boop", ephemeral=True)
-        await autoSeeding()
+        #await autoSeeding()
     
 ################ END COMMANDS ################
 
@@ -1989,9 +2004,9 @@ if (cfg.get('featureEnable_Seeding', False)):
     @aiocron.crontab("* * * * * 15") # Runs every 15th second of every minute
     async def autoSeeding():
         await seedingAssignPoints()
-        # seedingAutoRedeem()
-        # seedingPurgeExpiredWLs()
-        # seedingGenerateCFG()
+        seedingAutoRedeem()
+        seedingPurgeExpiredWLs()
+        seedingGenerateCFG()
 
 
 async def main():
@@ -2061,12 +2076,20 @@ async def steamAuthEndpoint_root(request:web.Request):
 
 async def steamAuthEndpoint_authorize(request:web.Request):
     steamLogin = SteamSignIn()
-    returnedSteamID = steamLogin.ValidateResults(request.rel_url.query)
-    if(returnedSteamID == False):
+    steamID = steamLogin.ValidateResults(request.rel_url.query)
+    if(steamID == False):
         return web.Response(text="Could not validate your openID authorization with Steam.")
-    # returnedSteamID contains a validated steamID
+    # steamID contains a validated steamID confirmed by steam
     try:
-        return web.Response(text=f"Thank you, your SteamID {returnedSteamID} has been linked to {request.rel_url.query['discordid']}.")
+        # Insert the steamID and discordID into the db
+        discordID = request.rel_url.query['discordid']
+        with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+            with closing(sqlite.cursor()) as sqlitecursor:
+                isBanking = 0 if getSettingB('seed_autoredeem', Defaults['seed_autoredeem']) else 1
+                sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?) ON CONFLICT(steamID) DO UPDATE SET discordID=?",
+                                     (steamID,discordID,isBanking,0,discordID))
+            sqlite.commit()
+        return web.Response(text=f"Thank you, your SteamID {steamID} has been linked to your DiscordID {discordID}. You can now close this tab and return to Discord.")
     except:
         return web.Response(text="Your authorization is missing your discordID somehow. Please try again.")
 
