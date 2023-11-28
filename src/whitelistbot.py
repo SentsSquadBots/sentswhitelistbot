@@ -51,13 +51,15 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S')
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
 
 try:
     from dotenv import load_dotenv
     logging.info(f"Loaded .env: {load_dotenv(override=True)}")
 except: pass
-try:
-    from pysteamsignin.steamsignin import SteamSignIn
+try: from pysteamsignin.steamsignin import SteamSignIn
 except: pass
 
 #region GROUPS
@@ -503,6 +505,7 @@ class SquadClient(discord.Client):
    
     def is_me(self, m):
         return m.author == client.user
+client = SquadClient(intents=intents)
 #endregion SquadClient
 
 #region INTERACTION CLASSES
@@ -716,11 +719,6 @@ class SeedingPoints_AutoRedeem(discord.ui.Button):
             await sqlite.commit()
   
 #endregion INTERACTION CLASSES
-
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-client = SquadClient(intents=intents)
 
 #region CONFIG
 cfg={}
