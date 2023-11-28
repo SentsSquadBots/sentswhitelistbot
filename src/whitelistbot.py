@@ -694,7 +694,16 @@ class SeedingPoints_Redeem(discord.ui.Button):
         super().__init__(label="Redeem Now",style=discord.ButtonStyle.secondary, emoji='🔄', custom_id="SeedingPoints_Redeem")
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(content=f"TODO", ephemeral=True)
+        seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
+        async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+            points = (await (await sqlite.execute("SELECT SUM(points) FROM seeding_Users WHERE discordID=?", (interaction.user.id, ))).fetchone())[0]
+        if (points is None):
+            await interaction.response.send_message(content=f"Error. You have not verified your Steam account yet. Please use the `Verify SteamID` button first.", ephemeral=True)
+            return
+        if (points < seed_threshold):
+            await interaction.response.send_message(content=f"Sorry, you need at least `{seed_threshold}` points before you can redeem them. You only have `{points}`", ephemeral=True)
+            return
+        await interaction.response.send_message(content=f"TODO redeem", ephemeral=True)
 
 class SeedingPoints_AutoRedeem(discord.ui.Button):
     def __init__(self):
@@ -1586,7 +1595,7 @@ __The current global settings are__:
 - You receive `1` seed point every minute you are on the server while the player count is between `{seed_minplayers}` and `{seed_maxplayers}`.
 - Points are {'not capped' if seed_pointcap == 0 else 'capped at ' + seed_pointcap}
 - A single seed point is worth `{seed_pointworth}` days of whitelist. 
-  - That means to get 30 days of whitelist, you'd need to seed for a total of `{round(30/seed_pointworth/60,1)}` hours.
+  - That means to get 30 days of whitelist, you'd need to seed for a total of `{round(30/seed_pointworth/60,1)}` hours. That's {round(30/seed_pointworth,1)} points.
 __FAQ__:
 *Why do I need to sign in through Steam?* 
 Because this way we confirm you own the Steam account you're trying to redeem points for. The only information we store from Steam is your SteamID. You can choose not to use this service.
