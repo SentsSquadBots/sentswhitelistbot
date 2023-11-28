@@ -1715,7 +1715,7 @@ async def seedingAssignPoints():
             try:
                 currentmapResp = await getCurrentMapBM(bmID)
                 seedSteamIDsAll = None
-                logging.info(f"[{bmID}] Current map: {currentmapResp}")
+                #logging.info(f"[{bmID}] Current map: {currentmapResp}")
                 if currentmapResp is None: continue
                 # Check if we're currently on a seed map
                 if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
@@ -1727,9 +1727,9 @@ async def seedingAssignPoints():
                         seedSteamIDs = removeAdmins(seedSteamIDs)
                     # If the playercount is outside the threshold of min and max players, don't assign any points
                     if ( not( getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers']) )):
-                        logging.info(f"We're on a seed layer but player count outside of range")
+                        #logging.info(f"We're on a seed layer but player count outside of range")
                         continue
-                    logging.info(f"Current seeders: {seedSteamIDs}")
+                    #logging.info(f"Current seeders: {seedSteamIDs}")
                     ## Give all players 1 seeding point
                     for steamID in seedSteamIDs:
                         pointRow = await (await sqlite.execute("SELECT points FROM seeding_Users WHERE steamID=?", (steamID,))).fetchone()
@@ -1748,10 +1748,10 @@ async def seedingAssignPoints():
                     steamIDsAdmins = filterAdmins(seedSteamIDsAll)
                     if len(steamIDsAdmins) > 0:
                         if getSettingI('seed_minplayers', Defaults['seed_minplayers']) > 0 and len(seedSteamIDsAll) < getSettingI('seed_minplayers', Defaults['seed_minplayers']):
-                            logging.info(f"Not recording admin acivity, playercount under threshold.")
+                            #logging.info(f"Not recording admin acivity, playercount under threshold.")
                             continue
-                        logging.info(f"Recording activity of {len(steamIDsAdmins)} online admins.")
-                        logging.info(f"Admins: {steamIDsAdmins}")
+                        #logging.info(f"Recording activity of {len(steamIDsAdmins)} online admins.")
+                        #logging.info(f"Admins: {steamIDsAdmins}")
                     for steamID in steamIDsAdmins:
                         if 'Jensen' in currentmapResp:
                             await sqlite.execute("INSERT INTO adminTracking(steamID,minutesOnJensens) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnJensens = minutesOnJensens + 1", (steamID,1))
@@ -1760,7 +1760,7 @@ async def seedingAssignPoints():
                         else:
                             await sqlite.execute("INSERT INTO adminTracking(steamID,minutesOnLive) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnLive = minutesOnLive + 1", (steamID,1))
             except Exception as e: 
-                logging.error(e)
+                logging.error(f"Error while assigning seeding points: {e}")
                 continue
         await sqlite.commit()
 
