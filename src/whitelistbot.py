@@ -677,7 +677,7 @@ class SeedingPoints_Link(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         steamLogin = SteamSignIn()
-        encodedData = steamLogin.ConstructURL(f"http://{os.getenv('steamAuthEndpoint_Host', '127.0.0.1')}:{os.getenv('steamAuthEndpoint_Port', '42879')}/authorize?discordid={interaction.user.id}")
+        encodedData = steamLogin.ConstructURL(f"{os.getenv('steamAuthEndpoint_Host', 'http://127.0.0.1')}:{os.getenv('steamAuthEndpoint_Port', '42879')}/authorize?discordid={interaction.user.id}")
         auth_url = 'https://steamcommunity.com/openid/login' + "?" + encodedData
         embed = discord.Embed(title='Verify your SteamID', description=f"[Click here to log into your Steam Account to verify.]({auth_url})")
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -2144,7 +2144,7 @@ async def servefiles():
 
 #region SteamAuth
 async def steamAuthEndPoint():
-    logging.info(f"Starting Steam OpenID authorization endpoint - steamAuthEndpoint_Host={os.getenv('steamAuthEndpoint_Host', '127.0.0.1')} steamAuthEndpoint_Port={os.getenv('steamAuthEndpoint_Port', '42879')}")
+    logging.info(f"Starting Steam OpenID authorization endpoint - steamAuthEndpoint_Host={os.getenv('steamAuthEndpoint_Host', 'http://127.0.0.1')} steamAuthEndpoint_Port={os.getenv('steamAuthEndpoint_Port', '42879')}")
     webapp = web.Application()
     webapp.add_routes([web.get('/', steamAuthEndpoint_root)])
     webapp.add_routes([web.get('/authorize', steamAuthEndpoint_authorize)])
