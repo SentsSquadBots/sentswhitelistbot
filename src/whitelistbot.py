@@ -654,7 +654,28 @@ class SeedingPoints_Status(discord.ui.Button):
         super().__init__(label="Check Status",style=discord.ButtonStyle.secondary, emoji='❔', custom_id="SeedingPoints_Status")
 
     async def callback(self, interaction: discord.Interaction):
-        embed = discord.Embed(title='Seeding Points Status', description="TODO")
+        description = ""
+        seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
+        seed_pointworth = getSettingF('seed_pointworth', Defaults['seed_pointworth'])
+        async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
+            steamIDs = ''
+            points = 0
+            isBankingA = 0
+            for steamID,isBanking,point in await sqlite.execute_fetchall("SELECT steamID,isBanking,points FROM seeding_Users WHERE discordID=?", (interaction.user.id, )):
+                steamIDs += f'{steamID}, '
+                points += point
+                isBankingA = isBanking
+            if (steamIDs == ''):
+                description += f"You have not verified your Steam account yet. Please use the `Verify SteamID` button first."
+            else:
+                description += f"Verified SteamID(s): `{steamIDs.strip(', ')}`\n"
+                description += f"Auto Redeem: `{ 'ON' if isBankingA == 0 else 'OFF' }`\n"
+                description += f"Seeding Points: `{points}`\n"
+                if (points < seed_threshold):
+                    description += f"You must have at least `{ seed_threshold }` points in order to redeem them.\n"
+                if (points >= seed_threshold):
+                    description += f"Your points are worth `{ round(points*seed_pointworth, 1) }` days of whitelist!\n"
+        embed = discord.Embed(title='Seeding Points Status', description=description.strip('\n'))
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class SeedingPoints_Link(discord.ui.Button):
@@ -1544,18 +1565,31 @@ __Seeding Settings__\n
     @group_Seeding.command()
     async def sendpanel(interaction: discord.Interaction, channel: discord.TextChannel):
         await interaction.response.send_message("Panel created", ephemeral=True)
+        seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
+        seed_pointworth = getSettingF('seed_pointworth', Defaults['seed_pointworth'])
+        seed_pointcap = getSettingI('seed_pointcap', Defaults['seed_pointcap'])
+        seed_minplayers = getSettingI('seed_minplayers', Defaults['seed_minplayers'])
+        seed_maxplayers = getSettingI('seed_maxplayers', Defaults['seed_maxplayers'])
         try:
             embed = discord.Embed(title="Manage your Seeding Points!", 
             description=f"""
 Use the buttons below to manage and redeem your stored seeding points. 
 You gain 1 seeding point per minute you spend on our server while seeding. You can redeem these points for free whitelist! 
-You can also enable AutoRedeem and as you hit the point threshold, the bot will automatically redeem your points for whitelist.
-To get started:
+You can also enable AutoRedeem and as you hit the point threshold, we will automatically redeem your points for whitelist.
+__To get started__:
 - Verify your Steam account by logging into Steam through the `Verify SteamID` button below. 
 - Once verified, check your current seeding points with the `Check Status` button. It will show you how much whitelist they are worth.
 - Redeem some or all of your points for whitelist with the `Redeem Now` button! (Or enable AutoRedeem if you're lazy)
-
-*Why do I need to sign in through Steam?* Because this way we confirm you own the Steam account you're trying to redeem points for. The only information we store from Steam is your SteamID. You can choose not to use this service.
+__The current global settings are__:
+- Minumum points required to redeem: `{seed_threshold}`
+- If you're using AutoRedeem, you'll auto redeem at `{seed_threshold}` points.
+- You receive `1` seed point every minute you are on the server while the player count is between `{seed_minplayers}` and `{seed_maxplayers}`.
+- Points are {'not capped' if seed_pointcap == 0 else 'capped at ' + seed_pointcap}
+- A single seed point is worth `{seed_pointworth}` days of whitelist. 
+  - That means to get 30 days of whitelist, you'd need to seed for a total of `{round(30/seed_pointworth/60,1)}` hours.
+__FAQ__:
+*Why do I need to sign in through Steam?* 
+Because this way we confirm you own the Steam account you're trying to redeem points for. The only information we store from Steam is your SteamID. You can choose not to use this service.
             """)
             embed.add_field(name="​", inline=False, value="Made with ♥ by <@177189581060308992>")
             view = SeedingPointsView()
