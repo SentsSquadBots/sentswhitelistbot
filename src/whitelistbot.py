@@ -1528,16 +1528,13 @@ __Seeding Settings__\n
             embed = discord.Embed(title="Manage your Seeding Points!", 
             description=f"""
 Use the buttons below to manage and redeem your stored seeding points. 
-You gain 1 seeding point per minute you spend on our server while seeding. You can redeem these points for free whitelist! 
-You can also enable AutoRedeem and as you hit the point threshold, we will automatically redeem your points for whitelist.
+### What are Seeding Points?
+You get 1 Seeding Point for every minute you are on the server during a seed/Jensens layer while the player count is between `{seed_minplayers}` and `{seed_maxplayers}`.
 ### To get started
-- Verify your Steam account by logging into Steam through the `Verify SteamID` button below. 
-- Once verified, check your current seeding points with the `Check Status` button. It will show you how much whitelist they are worth.
-- Redeem some or all of your points for whitelist with the `Redeem Now` button! (Or enable AutoRedeem if you're lazy)
-### The current global settings
-- Minumum points required to redeem: `{seed_threshold}`
-- If you're using AutoRedeem, you'll auto redeem at `{seed_threshold}` points.
-- You receive `1` seed point every minute you are on the server while the player count is between `{seed_minplayers}` and `{seed_maxplayers}`.
+1. Verify your Steam account by logging into Steam through the `Verify SteamID` button below. 
+2. Once verified, check your current seeding points with the `Check Status` button.
+3. If you have at least `{seed_threshold}` points, redeem some or all of them for whitelist with the `Redeem Now` button! (Or enable AutoRedeem and you'll automatically get WL every time you hit `{seed_threshold}` points)
+### The details
 - Points are {'not capped' if seed_pointcap == 0 else 'capped at ' + seed_pointcap}
 - A single seed point is worth `{seed_pointworth}` days of whitelist. 
   - That means to get 30 days of whitelist, you'd need to seed for a total of `{round(30/seed_pointworth/60,1)}` hours. That's `{round(30/seed_pointworth,1)}` points.
