@@ -925,7 +925,8 @@ class modal_Seeding_Redeem(ui.Modal, title='Redeem Points!'):
     steamID = ""
     def __init__(self, maxPoints, steamID):
         super().__init__()
-        self.points_Input = ui.TextInput(label="Redeem how many points?", style=discord.TextStyle.short, default=str(maxPoints))
+        seed_threshold = getSettingI('seed_threshold', Defaults['seed_threshold'])
+        self.points_Input = ui.TextInput(label=f"Enter between {seed_threshold}-{maxPoints} points", style=discord.TextStyle.short, default=str(maxPoints))
         self.add_item(self.points_Input)
         self.maxPoints = maxPoints
         self.steamID = steamID
@@ -951,7 +952,6 @@ class modal_Seeding_Redeem(ui.Modal, title='Redeem Points!'):
             await sqlite.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (self.steamID, ts_now + secondsToAdd,secondsToAdd))
             await sqlite.execute("UPDATE seeding_Users SET points = points-? WHERE steamID = ?", (pointsToRedeem,self.steamID))
             await sqlite.commit()
-        #logging.info(f"Redeem: SteamID {self.steamID} - tsnow {ts_now} - points {pointsToRedeem} - worth {seed_pointworth} - sec to add {secondsToAdd}")
         await interaction.response.send_message(f"You successfully redeemed `{pointsToRedeem}` points to SteamID `{self.steamID}`. Go check your Status!", ephemeral=True)
 
 #endregion MODALS
