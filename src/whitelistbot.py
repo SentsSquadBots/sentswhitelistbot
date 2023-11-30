@@ -2,7 +2,6 @@
 # Written by @Sentennial
 # Discord ID: 177189581060308992
 # TODO: optionally warn players when they join with their seed points/days? Need option with default - seed_ingamewarn
-# TODO: add discord logging for actions
 # TODO: option for monthly point wipe, delete all from seeding_Users - seed_monthlywipe
 
 import discord
@@ -499,7 +498,8 @@ class SquadClient(discord.Client):
             logging.info(f"{title}: {message}")
             return
         CDDiscordServer = client.get_guild(cfg['DiscordServer_ID'])
-        logCh = await (CDDiscordServer.fetch_channel(cfg['log_channel_ID']))
+        #logCh = await (CDDiscordServer.fetch_channel(cfg['log_channel_ID']))
+        logCh = CDDiscordServer.get_channel_or_thread(cfg['log_channel_ID'])
         logEmbed = discord.Embed(title=title, description=message)
         await logCh.send(embed=logEmbed)
    
@@ -952,6 +952,7 @@ class modal_Seeding_Redeem(ui.Modal, title='Redeem Points!'):
             await sqlite.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (self.steamID, ts_now + secondsToAdd,secondsToAdd))
             await sqlite.execute("UPDATE seeding_Users SET points = points-? WHERE steamID = ?", (pointsToRedeem,self.steamID))
             await sqlite.commit()
+            await client.logMsg("Seeding WLs", f"{interaction.user.mention} redeemed `{pointsToRedeem}` points with SteamID `{self.steamID}`")
         await interaction.response.send_message(f"You successfully redeemed `{pointsToRedeem}` points to SteamID `{self.steamID}`. Go check your Status!", ephemeral=True)
 
 #endregion MODALS
@@ -1777,6 +1778,7 @@ async def seedingAutoRedeem():
             secondsToAdd = int((datetime.now() + timedelta(days= points*seed_pointworth )).timestamp()) - int(datetime.now().timestamp())
             await sqlite.execute("INSERT INTO seeding_Whitelists(steamID,expires) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET expires = expires + ?", (steamID, ts_now + secondsToAdd,secondsToAdd))
             await sqlite.execute("UPDATE seeding_Users SET points = 0 WHERE steamID = ?", (steamID,))
+            await client.logMsg("Seeding WLs", f"AutoRedeemed `{points}` points for <@{discordID}> with SteamID `{steamID}`")
         await sqlite.commit()
 
 async def seedingGenerateCFG():
@@ -2169,6 +2171,7 @@ async def steamAuthEndpoint_authorize(request:web.Request):
                 sqlitecursor.execute("INSERT INTO seeding_Users(steamID,discordID,isBanking,points) VALUES(?,?,?,?) ON CONFLICT(steamID) DO UPDATE SET discordID=?",
                                      (steamID,discordID,isBanking,0,discordID))
             sqlite.commit()
+        await client.logMsg("Seeding WLs", f"<@{discordID}> verified and linked to SteamID `{steamID}`.")
         return web.Response(text=f"Thank you, your SteamID {steamID} has been linked to your DiscordID {discordID}. You can now close this tab and check your status with the Check Status button in the Seeding Points panel in Discord.")
     except:
         return web.Response(text="Your authorization is missing your discordID somehow. Please try again.")
