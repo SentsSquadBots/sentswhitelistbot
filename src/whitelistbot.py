@@ -2028,7 +2028,8 @@ if (cfg.get('featureEnable_Paypal', False)):
                         continue # don't process pending transaction if we don't have their SteamID
 
                     for transaction in allTransactions:
-                        if (transaction['payer_info']['email_address'] == p_email):
+                        transactionID = transaction.get('transaction_info', {}).get('transaction_id', 'NULL_ID')
+                        if (transaction.get('payer_info', {}).get('email_address','') == p_email):
                             paidAmt = 0.0
                             try:
                                 paidAmt = float(transaction['transaction_info']['transaction_amount']['value'])
@@ -2038,14 +2039,14 @@ if (cfg.get('featureEnable_Paypal', False)):
         # add user's whitelist or extend it
         # put their transaction ID into the usedTransactions table
                             sqlitecursor.execute("DELETE FROM paypal_PendingTransactions WHERE discordID = ?", (p_discordID,))
-                            sqlitecursor.execute("INSERT INTO paypal_UsedTransactions(discordID,transactionID,timestamp) VALUES (?,?,?)", (p_discordID, transaction['transaction_info']['transaction_id'], ts_now))
+                            sqlitecursor.execute("INSERT INTO paypal_UsedTransactions(discordID,transactionID,timestamp) VALUES (?,?,?)", (p_discordID, transactionID, ts_now))
                             existingWL = sqlitecursor.execute("SELECT discordID, steamID, expires FROM paypal_Whitelists WHERE discordID = ?", (p_discordID,)).fetchall()
                             if (len(existingWL) > 0):
                                 sqlitecursor.execute("UPDATE paypal_Whitelists SET steamID = ?, expires = ? WHERE discordID = ?", (p_steamID, existingWL[0][2]+secondsToAdd, p_discordID))
-                                await client.logMsg("PayPal WL", f"Verified new transaction (`{transaction['transaction_info']['transaction_id']}`), ${paidAmt}. Whitelist for <@{p_discordID}> 's steamID `{p_steamID}` EXTENDED, will now expire on <t:{existingWL[0][2]+secondsToAdd}:f>")
+                                await client.logMsg("PayPal WL", f"Verified new transaction (`{transactionID}`), ${paidAmt}. Whitelist for <@{p_discordID}> 's steamID `{p_steamID}` EXTENDED, will now expire on <t:{existingWL[0][2]+secondsToAdd}:f>")
                             else:
                                 sqlitecursor.execute("INSERT INTO paypal_Whitelists (discordID, steamID, expires) VALUES (?, ?, ?)", (p_discordID, p_steamID, int(time.time())+secondsToAdd))
-                                await client.logMsg("PayPal WL", f"Verified new transaction (`{transaction['transaction_info']['transaction_id']}`), ${paidAmt}. Whitelist for <@{p_discordID}> 's steamID `{p_steamID}` ADDED, will expire on <t:{int(time.time())+secondsToAdd}:f>")
+                                await client.logMsg("PayPal WL", f"Verified new transaction (`{transactionID}`), ${paidAmt}. Whitelist for <@{p_discordID}> 's steamID `{p_steamID}` ADDED, will expire on <t:{int(time.time())+secondsToAdd}:f>")
                             
                             sqlite.commit()
         # give them their roles
