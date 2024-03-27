@@ -545,8 +545,21 @@ class ButtonCheckPatreonButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="Whitelist Status",style=discord.ButtonStyle.success, emoji='🏆', custom_id="ButtonCheckPatreonButton")
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        message = await (interaction.followup.send("Checking your Whitelist Status...", ephemeral=True, wait=True))
         description = client.getWhitelistStatus(interaction.user.id)
-        await interaction.response.send_message(f'{description}', ephemeral=True)
+
+        if (len(description) > 1900):
+            resp = splitMsgLines2k(description)
+            first = True
+            for msg in resp:
+                if first:
+                    await message.edit(content=f'{msg}') 
+                    first = False
+                else:
+                    await interaction.followup.send(msg, ephemeral=True, wait=True)
+        else:
+            await message.edit(content=f'{description}') 
 
 class ButtonLinkPatreonButton(discord.ui.Button):
     def __init__(self):
@@ -1588,7 +1601,17 @@ async def sendpanel(interaction: discord.Interaction, channel: discord.TextChann
 async def whiteliststatus(interaction: discord.Interaction, user_to_check: discord.Member):
     """Check the whitelist status for a discord user."""
     description = "**Whitelist Status for Discord Member " + user_to_check.name + "**\n"+client.getWhitelistStatus(user_to_check.id, thirdPerson=True)
-    await interaction.response.send_message(description)
+    if (len(description) > 1900):
+        resp = splitMsgLines2k(description)
+        first = True
+        for msg in resp:
+            if first:
+                await interaction.response.send_message(msg)
+                first = False
+            else:
+                await interaction.channel.send(msg)
+    else:
+        await interaction.response.send_message(description)
 
 @group_MultiWL.command()
 async def editwhitelist(interaction: discord.Interaction, user_to_edit: discord.Member):
@@ -1946,6 +1969,18 @@ def filterAdmins(listOfSteamIDs:List[str]) -> List[str]:
                 if (sqlitecursor.execute("SELECT discordID FROM squadGroups_SteamIDs WHERE steamID=?", (sid,)).fetchone()):
                     filteredList.append(sid)
     return filteredList
+
+def splitMsgLines2k(string:str) -> List[str]:
+    res = []
+    tmp = ""
+    for line in string.splitlines():
+        if (len(tmp) + len(line) < 1900):
+            tmp += f"{line}\n"
+        else:
+            res.append(tmp+"```")
+            tmp = f"```\n{line}\n"
+    res.append(tmp)
+    return res
 #endregion SteamID Helpers
 
 #region ScheduledTasks
