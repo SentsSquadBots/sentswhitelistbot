@@ -765,7 +765,7 @@ cfg['multiwl_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os
 cfg['seeding_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('seeding_outputFile', 'seedingWLs.cfg'))
 
 cfg['clanMoniker']=os.getenv('clanMoniker', 'Clan')
-cfg['pathToClanWhitelist']=os.getenv('pathToClanWhitelist', 'clanWLs.cfg')
+cfg['pathToClanWhitelist']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('pathToClanWhitelist', 'clanWLs.cfg'))
 cfg['clanWhitelists']=literal_eval(os.getenv('clanWhitelists', '{}'))
 cfg['squadGroups_updateCron']=os.getenv('squadGroups_updateCron', '* * * * * */30')
 cfg['secondsBetweenWhitelistUpdates']=int(os.getenv('secondsBetweenWhitelistUpdates', '86400'))
