@@ -1697,15 +1697,16 @@ def setSetting(key:str, val):
 #endregion SettingHelpers
 
 #region BM Helpers
-async def getCurrentMapBM(bmID):
+async def getCurrentMapBM(bmID, bmAPIkey):
     themap = "Bad BM Response"
     try:
-        async with aiohttp.ClientSession() as session:
+        battleMetricsKey = {'Authorization': 'Bearer ' + bmAPIkey}
+        async with aiohttp.ClientSession(headers=battleMetricsKey) as session:
             async with session.get(f'https://api.battlemetrics.com/servers/{bmID}') as response:
                 bmData = (await response.json())['data']
                 return bmData['attributes']['details']['map']
     except Exception as e:
-        logging.error(f"Error calling BM API: {e}")
+        logging.error(f"getCurrentMapBM Error calling BM API: {e}")
     return themap
 
 async def getAllPlayersBM(bmID, bmAPIkey):
@@ -1722,7 +1723,7 @@ async def getAllPlayersBM(bmID, bmAPIkey):
                         continue
                     steamIDlist.append(included['attributes']['identifier'])
     except Exception as e:
-        logging.error(f"Error calling BM API: {e}")
+        logging.error(f"getAllPlayersBM Error calling BM API: {e}")
     return steamIDlist
 #endregion BM Helpers
 
@@ -1734,12 +1735,12 @@ async def seedingAssignPoints():
         # Check each server to see if they're seeding
         for bmID,bmAPIkey in await sqlite.execute_fetchall("SELECT bmID,bmAPIkey FROM seeding_Servers"):
             try:
-                currentmapResp = await getCurrentMapBM(bmID)
+                currentmapResp = await getCurrentMapBM(bmID,bmAPIkey)
                 seedSteamIDsAll = None
                 #logging.info(f"[{bmID}] Current map: {currentmapResp}")
                 if currentmapResp is None: continue
                 # Check if we're currently on a seed map
-                if 'Jensen' in currentmapResp or 'Seed' in currentmapResp:
+                if 'Jensen' in currentmapResp or 'Seed' in currentmapResp or "Skirmish" in currentmapResp:
                     seedSteamIDs = await getAllPlayersBM(bmID,bmAPIkey)
                     if seedSteamIDs is None: continue
                     seedSteamIDsAll = seedSteamIDs.copy()
