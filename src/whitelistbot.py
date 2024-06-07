@@ -15,7 +15,6 @@ import traceback
 import aiocron
 import patreon
 import random
-import socket
 import csv
 from pathlib import Path
 from typing import List
