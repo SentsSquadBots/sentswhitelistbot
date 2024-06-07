@@ -2103,7 +2103,7 @@ if (cfg.get('featureEnable_Paypal', False)):
                         for roleIdToRemove in cfg['paypal_roles']:
                             await member.remove_roles(guild.get_role(roleIdToRemove))
                     except Exception as e:
-                        await client.logMsg("PayPal WL", f"There was an error removing discord user @<{p_discordID}> roles. Did they leave?\n{e}")                  
+                        await client.logMsg("PayPal WL", f"There was an error removing discord user <@{p_discordID}> roles. Did they leave?\n{e}")                  
         # delete any whitelists from table that have expired
                 sqlitecursor.execute("DELETE FROM paypal_Whitelists WHERE expires < ?", (ts_now,))
                 sqlite.commit()
