@@ -756,6 +756,7 @@ cfg['featureEnable_WhitelistAutoUpdate']=os.getenv('featureEnable_WhitelistAutoU
 cfg['featurePatreonAudit']=os.getenv('featurePatreonAudit', 'False').lower() in ('true', '1', 'y')
 cfg['featureEnable_PatreonAutoAudit']=os.getenv('featureEnable_PatreonAutoAudit', 'False').lower() in ('true', '1', 'y')
 cfg['featureEnable_Seeding']=os.getenv('featureEnable_Seeding', 'False').lower() in ('true', '1', 'y')
+cfg['seeding_EnablePlayerTracking']=os.getenv('seeding_EnablePlayerTracking', 'False').lower() in ('true', '1', 'y')
 
 cfg['paypal_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('paypal_outputFile', 'paypalWLs.cfg'))
 cfg['monthlyWhitelists_outputFile']=os.path.join(os.getenv('container_cfg_folder', ''), os.getenv('monthlyWhitelists_outputFile', 'monthlyWLs.cfg'))
@@ -1516,6 +1517,33 @@ __Seeding Settings__\n
                         writer.writerow([row[0], row[1], discordName, row[2], row[3], row[4]])
         await interaction.response.send_message(f"Here you go!", file=discord.File('admin_tracker.csv', filename='admin_tracker.csv'))
         
+    if (cfg.get('seeding_EnablePlayerTracking', False)):
+        @group_Seeding.command()
+        async def playerreport(interaction: discord.Interaction, month:int, year:int):
+            """Generates a .csv file of all players and their tracked seed hours for the given month/year."""
+            filename = f'player_report_{year}-{month}.csv'
+            with open(filename, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["steamID", "discordID", "discordName", "minutesOnSeed", "month", "year"])
+                with closing(sqlite3.connect(cfg['sqlite_db_file'])) as sqlite:
+                    with closing(sqlite.cursor()) as sqlitecursor:
+                        rows = sqlitecursor.execute(f"SELECT \
+                                            playerTracking.steamID, \
+                                            seeding_Users.discordID, \
+                                            playerTracking.minutesSeeding \
+                                            FROM playerTracking LEFT JOIN seeding_Users \
+                                            ON playerTracking.steamID = seeding_Users.steamID \
+                                            WHERE playerTracking.month = {month} AND playerTracking.year = {year} \
+                                            ORDER BY playerTracking.minutesSeeding DESC").fetchall()
+                        for row in rows:
+                            discordName = 'Unknown'
+                            try:
+                                user = client.get_guild(cfg['DiscordServer_ID']).get_member(int(row[1]))
+                                discordName = user.display_name
+                            except: pass
+                            writer.writerow([row[0], row[1], discordName, row[2], month, year])
+            await interaction.response.send_message(f"Here you go!", file=discord.File(filename, filename=filename))
+
     @app_commands.describe(confirm='Are you sure?', confirm2='Are you really sure?')
     @group_Seeding.command()
     async def resetadmintracking(interaction: discord.Interaction, confirm:bool = False, confirm2:bool = False):
@@ -1708,7 +1736,7 @@ async def getCurrentMapBM(bmID, bmAPIkey):
         logging.error(f"getCurrentMapBM Error calling BM API: {e}")
     return themap
 
-async def getAllPlayersBM(bmID, bmAPIkey):
+async def getAllPlayersBM(bmID, bmAPIkey) -> List[str]:
     steamIDlist = []
     try:
         battleMetricsKey = {'Authorization': 'Bearer ' + bmAPIkey}
@@ -1728,7 +1756,7 @@ async def getAllPlayersBM(bmID, bmAPIkey):
 
 #region Seeding Helpers
 async def seedingAssignPoints():
-    """Assign 1 point to every player on each server if that server meets the seeding requirements."""
+    """Assign 1 point to every player on each server if that server meets the seeding requirements. Also track admins and players if enabled"""
     # uses async sqlite
     async with aiosqlite.connect(cfg['sqlite_db_file']) as sqlite:
         # Check each server to see if they're seeding
@@ -1762,7 +1790,7 @@ async def seedingAssignPoints():
                             if (pointCap == 0 or pointRow[0] < pointCap):
                                 await sqlite.execute("UPDATE seeding_Users SET points=points+1 WHERE steamID=?", (steamID,))
                 
-                ## Track Admin time ##
+    ## Track Admin time ##
                 if (cfg.get('featureEnable_SquadGroups', False) and getSettingI('seed_trackadmins', Defaults['seed_trackadmins'])):
                     if (seedSteamIDsAll is None):
                         seedSteamIDsAll = await getAllPlayersBM(bmID,bmAPIkey)
@@ -1780,6 +1808,22 @@ async def seedingAssignPoints():
                             await sqlite.execute("INSERT INTO adminTracking(steamID,minutesOnSeed) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnSeed = minutesOnSeed + 1", (steamID,1))
                         else:
                             await sqlite.execute("INSERT INTO adminTracking(steamID,minutesOnLive) VALUES (?,?) ON CONFLICT (steamID) DO UPDATE SET minutesOnLive = minutesOnLive + 1", (steamID,1))
+    ## Track Player Seed Time ##
+                if (cfg.get('seeding_EnablePlayerTracking', False) 
+                    # And we're on a seed layer
+                    and ('Jensen' in currentmapResp or 'Seed' in currentmapResp or 'Skirmish' in currentmapResp)
+                    # And the player count is between min and max thresholds for rewards
+                    and (getSettingI('seed_minplayers', Defaults['seed_minplayers']) < len(seedSteamIDs) < getSettingI('seed_maxplayers', Defaults['seed_maxplayers'])) 
+                    ):
+                    
+                    if (seedSteamIDsAll is None):
+                        seedSteamIDsAll = await getAllPlayersBM(bmID,bmAPIkey)
+                    curMonth = datetime.now().month
+                    curYear = datetime.now().year
+                    for steamID in seedSteamIDsAll:
+                        await sqlite.execute("INSERT INTO playerTracking(steamID,minutesSeeding,month,year) VALUES (?,?,?,?) ON CONFLICT (steamID, month, year) DO UPDATE SET minutesSeeding = minutesSeeding + 1", (steamID,1,curMonth,curYear))
+                        #logging.info(f"Player Tracking: {steamID} +1 seed minute for {curYear}-{curMonth}")
+
             except Exception as e: 
                 logging.error(f"Error while assigning seeding points: {e}")
                 continue
@@ -2149,6 +2193,7 @@ async def main():
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS seeding_Whitelists (steamID TEXT NOT NULL PRIMARY KEY, expires INTEGER NOT NULL )")
             
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS adminTracking (steamID TEXT NOT NULL PRIMARY KEY, minutesOnJensens INTEGER NOT NULL DEFAULT 0, minutesOnSeed INTEGER NOT NULL DEFAULT 0, minutesOnLive INTEGER NOT NULL DEFAULT 0 )")
+            sqlitecursor.execute("CREATE TABLE IF NOT EXISTS playerTracking (steamID TEXT NOT NULL, minutesSeeding INTEGER NOT NULL DEFAULT 0, month INTEGER NOT NULL, year INTEGER NOT NULL, PRIMARY KEY (steamID, month, year) )")
 
             sqlitecursor.execute("CREATE TABLE IF NOT EXISTS keyvals (key TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL )")
             
