@@ -11,6 +11,8 @@ services:
     image: ghcr.io/sentssquadbots/sentswhitelistbot:latest
     container_name: whitelistbot
     restart: always
+    ports:
+       - 42879:42879
     env_file:
       - .env    
     volumes:
